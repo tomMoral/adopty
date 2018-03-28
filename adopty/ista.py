@@ -1,3 +1,6 @@
+"""Ista algorithm for the LASSO
+"""
+
 import numpy as np
 from time import time
 
