@@ -1,3 +1,14 @@
+"""Plot the initial cost function
+=================================
+
+Plot the initial cost function for all the methods:
+    * :func:ista
+    * :func:fista
+    * :func:lista
+    * ...
+"""
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 
