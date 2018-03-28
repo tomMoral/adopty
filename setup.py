@@ -11,13 +11,26 @@ MAINTAINER = 'Thomas Moreau'
 MAINTAINER_EMAIL = 'thomas.moreau.2010@gmail.com'
 LICENSE = 'BSD (3-clause)'
 DOWNLOAD_URL = 'https://github.com/tommoral/adopty.git'
-VERSION = '0.1.dev0'
 
 
-# parse_requirements() returns generator of pip.req.InstallRequirement objects
-with open('requirements.txt') as f:
-    REQUIREMENTS = [r.strip() for r in f.readlines()]
-REQUIREMENTS = [r for r in REQUIREMENTS if r != '']
+# Function to parse __version__ in `loky`
+def find_version():
+    here = os.path.abspath(os.path.dirname(__file__))
+    with open(os.path.join(here, 'loky', '__init__.py'), 'r') as fp:
+        version_file = fp.read()
+    version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",
+                              version_file, re.M)
+    if version_match:
+        return version_match.group(1)
+    raise RuntimeError("Unable to find version string.")
+
+
+def get_requirements():
+    """Return the requirements of the projects in requirements.txt"""
+    with open('requirements.txt') as f:
+        requirements = [r.strip() for r in f.readlines()]
+    return [r for r in requirements if r != '']
+
 
 if __name__ == "__main__":
     setup(name=DISTNAME,
@@ -25,7 +38,7 @@ if __name__ == "__main__":
           maintainer_email=MAINTAINER_EMAIL,
           description=DESCRIPTION,
           license=LICENSE,
-          version=VERSION,
+          version=find_version(),
           download_url=DOWNLOAD_URL,
           long_description=open('README.rst').read(),
           classifiers=[
@@ -44,5 +57,5 @@ if __name__ == "__main__":
           packages=[
               'adopty'
           ],
-          install_requires=REQUIREMENTS
+          install_requires=get_requirements()
           )
