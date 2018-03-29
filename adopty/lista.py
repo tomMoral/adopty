@@ -15,7 +15,7 @@ class Lista(torch.nn.Module):
             ctx = AVAILABLE_CONTEXT[0]
 
         self._ctx = ctx
-        self.n_layers
+        self.n_layers = n_layers
 
         self.D = np.array(D)
         self.B = D.dot(D.T)
@@ -23,7 +23,10 @@ class Lista(torch.nn.Module):
 
         self.params = []
 
-    def init_network_torch(self, id_layer, params=None):
+        self.init_network_torch()
+
+    def init_network_torch(self, params=[]):
+        super().__init__()
         n_atoms = self.D.shape[0]
 
         self.params = []
@@ -33,16 +36,21 @@ class Lista(torch.nn.Module):
             else:
                 param = [np.eye(n_atoms) - self.B / self.L, self.D.T / self.L]
             Wz = torch.nn.Parameter(torch.from_numpy(param[0]))
-            Wx = torch.nn.Parameter(torch.from_numpy(param[0]))
+            Wx = torch.nn.Parameter(torch.from_numpy(param[1]))
 
             self.params += [(Wz, Wx)]
 
     def forward(self, x, lmbd, z0=None):
+        # Construct the first layer
         p = self.params[0]
         z_hat = x.matmul(p[1])
         if z0:
             z_hat += z0.matmul(p[0])
+        z_hat = torch.nn.functional.softshrink(z_hat, lmbd / self.L)
+
+        # Construct the following layers
         for p in self.params[1:]:
             z_hat = z_hat.matmul(p[0]) + x.matmul(p[1])
+            z_hat = torch.nn.functional.softshrink(z_hat, lmbd / self.L)
 
         return x
