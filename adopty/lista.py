@@ -41,16 +41,20 @@ class Lista(torch.nn.Module):
             self.params += [(Wz, Wx)]
 
     def forward(self, x, lmbd, z0=None):
-        # Construct the first layer
+        # Compat numpy
+        if isinstance(x, np.ndarray):
+            x = torch.autograd.Variable(torch.Tensor(x).double())
+
+        # Compute the first layer
         p = self.params[0]
         z_hat = x.matmul(p[1])
         if z0:
             z_hat += z0.matmul(p[0])
         z_hat = torch.nn.functional.softshrink(z_hat, lmbd / self.L)
 
-        # Construct the following layers
+        # Compute the following layers
         for p in self.params[1:]:
             z_hat = z_hat.matmul(p[0]) + x.matmul(p[1])
             z_hat = torch.nn.functional.softshrink(z_hat, lmbd / self.L)
 
-        return x
+        return z_hat

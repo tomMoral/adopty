@@ -40,7 +40,7 @@ def ista(D, x, reg, z_init=None, max_iter=100):
     lmbd = lmbd_max * reg
 
     L = np.linalg.norm(D.dot(D.T), 2)
-    step_size = .99 / L
+    step_size = 1 / L
 
     # Generate an initial point
     if z_init:
@@ -49,7 +49,7 @@ def ista(D, x, reg, z_init=None, max_iter=100):
         z_hat = np.zeros((n_trials, n_atoms))
 
     times = []
-    cost_ista = []
+    cost_ista = [cost(z_hat, D, x, lmbd)]
     for _ in range(max_iter):
         t_start_iter = time()
         z_hat -= step_size * (z_hat.dot(D) - x).dot(D.T)
@@ -58,4 +58,4 @@ def ista(D, x, reg, z_init=None, max_iter=100):
 
         cost_ista += [cost(z_hat, D, x, lmbd)]
 
-    return z_hat, cost_ista, times
+    return z_hat, cost_ista, times, lmbd
