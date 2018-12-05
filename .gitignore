@@ -8,4 +8,6 @@ __pycache__
 # Cache directories
 /.joblib
 /.pytest_cache
+.vscode
+
 

@@ -1,3 +1,4 @@
+import numpy as np
 
 
 def cost(z_hat, D, x, lmbd, flatten=False):
@@ -25,3 +26,12 @@ def grad(z_hat, D, x, lmbd=None, flatten=False, return_func=False):
         return cost(z_hat, D, x, lmbd), grad
 
     return grad
+
+
+def soft_thresholding(z, mu):
+    return np.maximum(abs(z) - mu, 0) * np.sign(z)
+
+
+def get_lmbd_max(D, x):
+    # Compute the effective regularization
+    return x.dot(D.T).max()
