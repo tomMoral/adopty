@@ -21,8 +21,8 @@ def _forward(x, weights, p, n_layers, D, level, der_function):
     return z
 
 
-def sgd(weights, X, gradient_function, full_loss, logger, l_rate=0.001,
-        max_iter=100, batch_size=None, log=True, verbose=False):
+def _sgd(weights, X, gradient_function, full_loss, logger, l_rate=0.001,
+         max_iter=100, batch_size=None, log=True, verbose=False):
     _, n_samples = X.shape
     if batch_size is None:
         batch_size = n_samples
@@ -45,13 +45,23 @@ def sgd(weights, X, gradient_function, full_loss, logger, l_rate=0.001,
 
 
 class LISTA(object):
-    def __init__(self, D, lbda, n_layers=2, model='lasso', rng=None,
-                 l_star=0.):
+    def __init__(self, D, lbda, n_layers=2, model='lasso'):
+        '''
+        Parameters
+        ----------
+        D : array, shape (k, p)
+            Dictionnary
+        lbda : float
+            regularization
+        n_layers : int
+            Number of layers
+        model : str
+            model to use. Either 'lasso' or 'logreg'
+        '''
         self.D = D
-        self.n, self.p = D.shape
+        self.k, self.p = D.shape
         self.lbda = lbda
         self.n_layers = n_layers
-        self.rng = check_random_state(rng)
         self.L = np.linalg.norm(D, ord=2) ** 2
         if model == 'logreg':
             self.L /= 4.
@@ -68,11 +78,34 @@ class LISTA(object):
         self.logger['grad'] = []
 
     def transform(self, x):
+        '''
+        Parameters
+        ----------
+        x : array, shape (k, n_samples) or (k,)
+            Input array
+
+        Returns
+        -------
+        z : array, shape (p, n_samples)
+            The output of the network, close from the minimum of the Lasso
+        '''
         return _forward(x, self.weights, self.p, self.n_layers, self.D,
                         self.level, self.der_function)
 
     def fit(self, X, solver='sgd', *args, **kwargs):
+        '''
+        Parameters
+        ----------
+        X : array, shape (k, n_samples) or (k,)
+            train array
+        solver : str
+            solver to use
+        *args, **kwargs : other arguments to pass to the solver
 
+        Returns
+        -------
+        self
+        '''
         def full_loss(weights, x):
             z = _forward(x, weights, self.p, self.n_layers, self.D, self.level,
                          self.der_function)
@@ -80,7 +113,7 @@ class LISTA(object):
 
         gradient_function = grad(full_loss)
         if solver == 'sgd':
-            weights = sgd(self.weights, X, gradient_function, full_loss,
-                          self.logger, *args, **kwargs)
+            weights = _sgd(self.weights, X, gradient_function, full_loss,
+                           self.logger, *args, **kwargs)
         self.weights = weights
         return self
