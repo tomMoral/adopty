@@ -37,7 +37,7 @@ def sgd(weights, X, gradient_function, full_loss, logger, l_rate=0.001,
                 logger['loss'].append(loss_value)
                 logger['grad'].append(gradient_value)
             if verbose:
-                print('it %d, loss = %.2e, grad = %.2e' %
+                print('it %d, loss = %.3e, grad = %.2e' %
                       (i, loss_value, gradient_value))
         for weight, gradient in zip(weights, gradients):
             weight -= l_rate * gradient
