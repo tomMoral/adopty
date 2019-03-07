@@ -7,22 +7,30 @@ from functions import (l2_fit, l2_der, logreg_fit, logreg_der, l1_pen, l1_prox,
                        l2_pen, l2_prox, no_prox, no_pen)
 
 
-def _forward(x, weights, p, n_layers, D, level, der_function, prox):
+def _forward(x, weights, p, n_layers, level, der_function, prox):
+    '''
+    defines the propagation in the network
+    '''
     if len(x.shape) == 1:
         z = np.zeros(p)
     else:
         _, n_samples = x.shape
         z = np.zeros((p, n_samples))
-    for W in weights:
-        z = prox(z - np.dot(W, der_function(np.dot(D, z), x)), level)
+    n_weights = len(weights) // 2
+    for i in range(n_weights):
+        W1 = weights[2 * i]
+        W2 = weights[2 * i + 1]
+        z = prox(z - np.dot(W1, der_function(np.dot(W2, z), x)), level)
     return z
 
 
-def _sgd(weights, X, gradient_function, full_loss, logger, l_rate=0.001,
-         max_iter=100, batch_size=None, log=True, verbose=False):
+def _sgd(weights, X, gradient_function, full_loss, logger, variables,
+         l_rate=0.001, max_iter=100, batch_size=None, log=True, verbose=False):
     _, n_samples = X.shape
     if batch_size is None:
         batch_size = n_samples
+
+    idx_to_skip = {'W1': 1, 'W2': 0, 'both': 2}[variables]
     for i in range(max_iter):
         sl = np.arange(i * batch_size, (i + 1) * batch_size) % n_samples
         x = X[:, sl]
@@ -36,7 +44,9 @@ def _sgd(weights, X, gradient_function, full_loss, logger, l_rate=0.001,
             if verbose:
                 print('it %d, loss = %.3e, grad = %.2e' %
                       (i, loss_value, gradient_value))
-        for weight, gradient in zip(weights, gradients):
+        for j, (weight, gradient) in enumerate(zip(weights, gradients)):
+            if j % 2 == idx_to_skip:
+                continue
             weight -= l_rate * gradient
     return weights
 
@@ -49,7 +59,8 @@ def make_loss(fit, pen):
 
 
 class LISTA(object):
-    def __init__(self, D, lbda, n_layers=2, fit_loss='l2', reg='l1'):
+    def __init__(self, D, lbda, n_layers=2, fit_loss='l2', reg='l1',
+                 variables='W1'):
         '''
         Parameters
         ----------
@@ -63,6 +74,8 @@ class LISTA(object):
             data fit term. 'l2' or 'logreg'
         reg : str or None
             regularization function. 'l1', 'l2' or None
+        variables : str
+            'W1', 'W2', or 'both'. The weights to learn.
         '''
         self.D = D
         self.k, self.p = D.shape
@@ -89,7 +102,9 @@ class LISTA(object):
         self.reg_function = reg_function
         self.loss = make_loss(self.fit_function, self.reg_function)
         self.prox = prox
-        self.weights = [self.D.T / self.L, ] * n_layers  # Init weights
+        self.weights = [self.D.T / self.L,  # W1
+                        self.D.copy()] * n_layers  # W2
+        self.variables = variables
         self.logger = {}
         self.logger['loss'] = []
         self.logger['grad'] = []
@@ -106,7 +121,7 @@ class LISTA(object):
         z : array, shape (p, n_samples)
             The output of the network, close from the minimum of the Lasso
         '''
-        return _forward(x, self.weights, self.p, self.n_layers, self.D,
+        return _forward(x, self.weights, self.p, self.n_layers,
                         self.level, self.der_function, self.prox)
 
     def fit(self, X, solver='sgd', *args, **kwargs):
@@ -124,13 +139,13 @@ class LISTA(object):
         self
         '''
         def full_loss(weights, x):
-            z = _forward(x, weights, self.p, self.n_layers, self.D, self.level,
+            z = _forward(x, weights, self.p, self.n_layers, self.level,
                          self.der_function, self.prox)
             return self.loss(z, x, self.D, self.lbda)
 
         gradient_function = grad(full_loss)
         if solver == 'sgd':
             weights = _sgd(self.weights, X, gradient_function, full_loss,
-                           self.logger, *args, **kwargs)
+                           self.logger, self.variables, *args, **kwargs)
         self.weights = weights
         return self
