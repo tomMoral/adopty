@@ -3,21 +3,18 @@ import autograd.numpy as np
 from autograd import grad
 from sklearn.utils import check_random_state
 
-from functions import lasso_loss, logreg_loss, lasso_der, logreg_der
+from functions import (l2_fit, l2_der, logreg_fit, logreg_der, l1_pen, l1_prox,
+                       l2_pen, l2_prox, no_prox, no_pen)
 
 
-def st(x, l):
-    return np.sign(x) * np.maximum(np.abs(x) - l, 0)
-
-
-def _forward(x, weights, p, n_layers, D, level, der_function):
+def _forward(x, weights, p, n_layers, D, level, der_function, prox):
     if len(x.shape) == 1:
         z = np.zeros(p)
     else:
         _, n_samples = x.shape
         z = np.zeros((p, n_samples))
     for W in weights:
-        z = st(z - np.dot(W, der_function(np.dot(D, z), x)), level)
+        z = prox(z - np.dot(W, der_function(np.dot(D, z), x)), level)
     return z
 
 
@@ -44,34 +41,54 @@ def _sgd(weights, X, gradient_function, full_loss, logger, l_rate=0.001,
     return weights
 
 
+def make_loss(fit, pen):
+    def loss(z, x, D, lbda):
+        return fit(z, x, D) + lbda * pen(z)
+
+    return loss
+
+
 class LISTA(object):
-    def __init__(self, D, lbda, n_layers=2, model='lasso'):
+    def __init__(self, D, lbda, n_layers=2, fit_loss='l2', reg='l1'):
         '''
         Parameters
         ----------
         D : array, shape (k, p)
             Dictionnary
         lbda : float
-            regularization
+            regularization strength
         n_layers : int
             Number of layers
-        model : str
-            model to use. Either 'lasso' or 'logreg'
+        fit_loss : str
+            data fit term. 'l2' or 'logreg'
+        reg : str or None
+            regularization function. 'l1', 'l2' or None
         '''
         self.D = D
         self.k, self.p = D.shape
         self.lbda = lbda
         self.n_layers = n_layers
         self.L = np.linalg.norm(D, ord=2) ** 2
-        if model == 'logreg':
+        if fit_loss == 'logreg':
             self.L /= 4.
         self.level = lbda / self.L
         self.B = np.dot(D.T, D)
-        self.model = model
-        loss, der_function = {'lasso': (lasso_loss, lasso_der),
-                              'logreg': (logreg_loss, logreg_der)}[self.model]
-        self.loss = loss
+        self.fit_loss = fit_loss
+        self.reg = reg
+        fit_function, der_function = {
+                                      'l2': (l2_fit, l2_der),
+                                      'logreg': (logreg_fit, logreg_der)
+                                      }[self.fit_loss]
+        reg_function, prox = {
+                              'l2': (l2_pen, l2_prox),
+                              'l1': (l1_pen, l1_prox),
+                              None: (no_pen, no_prox)
+                              }[self.reg]
+        self.fit_function = fit_function
         self.der_function = der_function
+        self.reg_function = reg_function
+        self.loss = make_loss(self.fit_function, self.reg_function)
+        self.prox = prox
         self.weights = [self.D.T / self.L, ] * n_layers  # Init weights
         self.logger = {}
         self.logger['loss'] = []
@@ -90,7 +107,7 @@ class LISTA(object):
             The output of the network, close from the minimum of the Lasso
         '''
         return _forward(x, self.weights, self.p, self.n_layers, self.D,
-                        self.level, self.der_function)
+                        self.level, self.der_function, self.prox)
 
     def fit(self, X, solver='sgd', *args, **kwargs):
         '''
@@ -108,7 +125,7 @@ class LISTA(object):
         '''
         def full_loss(weights, x):
             z = _forward(x, weights, self.p, self.n_layers, self.D, self.level,
-                         self.der_function)
+                         self.der_function, self.prox)
             return self.loss(z, x, self.D, self.lbda)
 
         gradient_function = grad(full_loss)
