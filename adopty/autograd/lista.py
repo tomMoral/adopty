@@ -1,3 +1,5 @@
+import warnings
+
 import autograd.numpy as np
 
 from autograd import grad
@@ -29,7 +31,7 @@ def _sgd(weights, X, gradient_function, full_loss, logger, variables,
     _, n_samples = X.shape
     if batch_size is None:
         batch_size = n_samples
-
+    old_loss = np.inf
     idx_to_skip = {'W1': 1, 'W2': 0, 'both': 2}[variables]
     for i in range(max_iter):
         sl = np.arange(i * batch_size, (i + 1) * batch_size) % n_samples
@@ -38,6 +40,9 @@ def _sgd(weights, X, gradient_function, full_loss, logger, variables,
         if i % 100 == 0 and (log or verbose):
             loss_value = full_loss(weights, X)
             gradient_value = np.sum((np.linalg.norm(g) for g in gradients))
+            if loss_value > old_loss:
+                warnings.warn('loss increasing')
+            old_loss = loss_value
             if log:
                 logger['loss'].append(loss_value)
                 logger['grad'].append(gradient_value)
