@@ -100,7 +100,8 @@ def test_facnet(reg):
 
 @pytest.mark.parametrize('reg', [.1, .3, .5, 2])
 @pytest.mark.parametrize('n_layers', [1, 3, 5, 10, 50, 100])
-def test_lista(reg, n_layers):
+@pytest.mark.parametrize('parametrization', ['lista', 'hessian', 'coupled'])
+def test_lista(reg, n_layers, parametrization):
 
     n_trials = 1000
     n_atoms = 100
@@ -121,7 +122,7 @@ def test_lista(reg, n_layers):
 
     z_hat, cost_ista, _ = ista(D, x, lmbd, max_iter=n_layers)
 
-    lista = Lista(D, n_layers)
+    lista = Lista(D, n_layers, parametrization=parametrization)
     z_lista = lista(x, lmbd)
 
     z_lista = z_lista.data.numpy()
