@@ -2,11 +2,7 @@ import autograd.numpy as np
 
 
 def l2_fit(z, x, D):
-    shape = x.shape
-    if len(shape) == 2:
-        _, n_samples = shape
-    else:
-        n_samples = 1
+    n_samples = get_n_samples(z)
     return 0.5 * np.sum((x - np.dot(D, z)) ** 2) / n_samples
 
 
@@ -15,11 +11,7 @@ def l2_der(x, y):
 
 
 def logreg_fit(z, x, D):
-    shape = x.shape
-    if len(shape) == 2:
-        _, n_samples = shape
-    else:
-        n_samples = 1
+    n_samples = get_n_samples(z)
     return np.sum(np.log1p(np.exp(- x * np.dot(D, z)))) / n_samples
 
 
@@ -29,11 +21,7 @@ def logreg_der(x, y):
 
 
 def l1_pen(z):
-    shape = z.shape
-    if len(shape) == 2:
-        _, n_samples = shape
-    else:
-        n_samples = 1
+    n_samples = get_n_samples(z)
     return np.sum(np.abs(z)) / n_samples
 
 
@@ -42,11 +30,7 @@ def l1_prox(x, level):
 
 
 def l2_pen(z):
-    shape = z.shape
-    if len(shape) == 2:
-        _, n_samples = shape
-    else:
-        n_samples = 1
+    n_samples = get_n_samples(z)
     return 0.5 * np.sum(z ** 2) / n_samples
 
 
@@ -60,3 +44,12 @@ def no_pen(z):
 
 def no_prox(x, level):
     return x
+
+
+def get_n_samples(z):
+    shape = z.shape
+    if len(shape) == 2:
+        _, n_samples = shape
+    else:
+        n_samples = 1
+    return n_samples
