@@ -7,7 +7,7 @@ def facnet_step(z_q, D, x, lmbd, A, S):
 
     Parameters
     ----------
-    z_q : ndarray, shape (n_trials, n_atoms)
+    z_q : ndarray, shape (n_samples, n_atoms)
         current solution estimate
     D : ndarray, shape (n_atoms, n_dims)
         Dictionary used to encode the data

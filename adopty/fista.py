@@ -5,7 +5,6 @@ import numpy as np
 from time import time
 
 from .utils import cost, grad, soft_thresholding
-from .ista import ista
 
 
 def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
@@ -13,9 +12,9 @@ def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
 
     Parameters
     ----------
-    D : array, shape (n_atoms, n_dimensions)
+    D : array, shape (n_atoms, n_dim)
         Dictionary used for the sparse coding
-    x : array, shape (n_trials, n_dimensions)
+    x : array, shape (n_samples, n_dim)
         Signal to encode on D
     lmbd : float
         Regularization parameter of the sparse coding
@@ -33,7 +32,7 @@ def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
     times : list
         Time taken by each iteration
     """
-    n_trials = x.shape[0]
+    n_samples = x.shape[0]
     n_atoms = D.shape[0]
 
     L = np.linalg.norm(D.dot(D.T), 2)
@@ -43,7 +42,7 @@ def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
     if z_init is not None:
         z_hat = np.copy(z_init)
     else:
-        z_hat = np.zeros((n_trials, n_atoms))
+        z_hat = np.zeros((n_samples, n_atoms))
 
     y_hat = z_hat
     tk = 1
