@@ -1,5 +1,5 @@
-from .utils import grad
-from .utils import soft_thresholding
+from .loss_and_gradient import grad
+from .loss_and_gradient import soft_thresholding
 
 
 def facnet_step(z_q, D, x, lmbd, A, S):
@@ -20,7 +20,8 @@ def facnet_step(z_q, D, x, lmbd, A, S):
     S : ndarray, shape (1, n_atoms)
         Diagonal matrix considered for Facnet step
     """
+    n_samples = x.shape[0]
     G_q = grad(z_q, D, x)
     y_q = z_q.dot(A) - G_q.dot(A) / S
 
-    return soft_thresholding(y_q, lmbd / S).dot(A.T)
+    return soft_thresholding(y_q, lmbd / S / n_samples).dot(A.T)

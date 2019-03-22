@@ -4,7 +4,7 @@
 import numpy as np
 from time import time
 
-from .utils import cost, grad, soft_thresholding
+from .loss_and_gradient import cost_lasso, grad, soft_thresholding
 
 
 def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
@@ -48,13 +48,13 @@ def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
     tk = 1
 
     times = []
-    cost_ista = [cost(z_hat, D, x, lmbd)]
+    cost_ista = [cost_lasso(z_hat, D, x, lmbd)]
     for it in range(max_iter):
         t_start_iter = time()
 
         z_hat_aux = z_hat
         y_hat -= step_size * grad(y_hat, D, x)
-        z_hat = soft_thresholding(y_hat, lmbd * step_size)
+        z_hat = soft_thresholding(y_hat, lmbd * step_size / n_samples)
         diff = z_hat - z_hat_aux
 
         tk_new = (1 + np.sqrt(1 + 4 * tk * tk)) / 2
@@ -62,7 +62,7 @@ def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
         tk = tk_new
 
         times += [time() - t_start_iter]
-        cost_ista += [cost(z_hat, D, x, lmbd)]
+        cost_ista += [cost_lasso(z_hat, D, x, lmbd)]
         dz = diff.ravel().dot(diff.ravel())
         if dz < tol:
             break
