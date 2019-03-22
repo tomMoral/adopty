@@ -1,7 +1,8 @@
 #! /usr/bin/env python
+import os
+import re
 import setuptools  # noqa; we are using a setuptools namespace
 from numpy.distutils.core import setup
-from pip.req import parse_requirements
 
 descr = """Adaptive Optimization for the LASSO"""
 
@@ -13,10 +14,10 @@ LICENSE = 'BSD (3-clause)'
 DOWNLOAD_URL = 'https://github.com/tommoral/adopty.git'
 
 
-# Function to parse __version__ in `loky`
+# Function to parse __version__ in `adopty`
 def find_version():
     here = os.path.abspath(os.path.dirname(__file__))
-    with open(os.path.join(here, 'loky', '__init__.py'), 'r') as fp:
+    with open(os.path.join(here, 'adopty', '__init__.py'), 'r') as fp:
         version_file = fp.read()
     version_match = re.search(r"^__version__ = ['\"]([^'\"]*)['\"]",
                               version_file, re.M)
