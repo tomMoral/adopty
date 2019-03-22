@@ -17,7 +17,7 @@ class Lista(torch.nn.Module):
 
     """
     def __init__(self, D, n_layers, parametrization="lista", solver="sgd",
-                 max_iter=100, name="LISTA", ctx=None, verbose=1):
+                 max_iter=100, name="LISTA", ctx=None, verbose=1, device=None):
         if ctx:
             msg = "Context {} is not available on this computer."
             assert ctx in AVAILABLE_CONTEXT, msg.format(ctx)
@@ -33,12 +33,13 @@ class Lista(torch.nn.Module):
         self.max_iter = max_iter
         self.solver = solver
         self._ctx = ctx
+        self.device = device
         self.verbose = verbose
         self.n_layers = n_layers
         self.parametrization = parametrization
 
         self.D = np.array(D)
-        self.D_ = torch.Tensor(self.D).double()
+        self.D_ = check_tensor(self.D, device=device)
         self.B = D.dot(D.T)
         self.L = np.linalg.norm(self.B, ord=2)
 
@@ -65,8 +66,9 @@ class Lista(torch.nn.Module):
                     parameters_layer = [I_k / self.L]
                 else:
                     raise NotImplementedError()
-            parameters_layer = [torch.nn.Parameter(torch.from_numpy(p))
-                                for p in parameters_layer]
+            parameters_layer = [
+                torch.nn.Parameter(check_tensor(p, device=self.device))
+                for p in parameters_layer]
             for j, p in enumerate(parameters_layer):
                 self.register_parameter("layer{}-p{}".format(i, j), p)
 
@@ -74,8 +76,8 @@ class Lista(torch.nn.Module):
 
     def forward(self, x, lmbd, z0=None, output_layer=None):
         # Compat numpy
-        x = check_tensor(x)
-        z0 = check_tensor(z0)
+        x = check_tensor(x, device=self.device)
+        z0 = check_tensor(z0, device=self.device)
 
         if output_layer is None:
             output_layer = self.n_layers
@@ -124,12 +126,11 @@ class Lista(torch.nn.Module):
 
         parameters = [p for params in self.params for p in params]
 
-        lr = 1
         training_loss = []
 
         # Compat numpy
         n_samples = x.shape[0]
-        x = check_tensor(x)
+        x = check_tensor(x, device=self.device)
 
         def loss_fn(z_hat):
             res = z_hat.matmul(self.D_) - x
@@ -137,35 +138,48 @@ class Lista(torch.nn.Module):
                     lmbd * torch.abs(z_hat).sum()) / n_samples
 
         max_iter_per_layer = self.max_iter // self.n_layers
+        max_iter_per_layer = np.diff(np.logspace(0, np.log10(self.max_iter), 4,
+                                                 dtype=int)) + 1000
 
         for n_layer in range(1, self.n_layers + 1):
-            for i in range(max_iter_per_layer):
+            lr = 1
+            max_iter = max_iter_per_layer[n_layer - 1]
+            for i in range(max_iter):
+
+                # Compute the forward operator
                 self.zero_grad()
                 z_hat = self(x, lmbd, output_layer=n_layer)
                 loss = loss_fn(z_hat)
                 loss_val = loss.detach().numpy()
+
+                # Verbosity of the output
                 if self.verbose > 5 and i % 10 == 0:
                     print(i, loss_val - c_star)
-                elif self.verbose > 0 and i % 10 == 0:
+                elif self.verbose > 0 and i % 50 == 0:
                     print("\rFitting model (layer {}/{}): {:7.2%}"
                           .format(n_layer, self.n_layers,
-                                  (i+1) / max_iter_per_layer),
+                                  (i+1) / max_iter),
                           end="", flush=True)
 
                 # Back-tracking line search
                 if len(training_loss) > 0 and training_loss[-1] < loss_val:
+                    if i + 1 == max_iter:
+                        lr *= 2
                     lr = self.backtrack_parameters(parameters, lr)
                     continue
-                training_loss.append(loss_val)
-                loss.backward()
 
+                # Accepting the previous point
+                training_loss.append(loss_val)
+
+                # Next gradient iterate
+                loss.backward()
                 lr = self.update_parameters(parameters, lr=lr)
 
         self.training_loss_ = np.array(training_loss)
         print("\rFitting model: done".ljust(80))
 
     def update_parameters(self, parameters, lr):
-        lr = min(2 * lr, 10)
+        lr = min(2 * lr, 1e6)
         self._saved_gradient = []
         for p in parameters:
             if p.grad is None:
