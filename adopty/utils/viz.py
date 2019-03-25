@@ -1,4 +1,5 @@
 import numpy as np
+from matplotlib import colors
 import matplotlib.pyplot as plt
 
 
@@ -58,6 +59,32 @@ def plot_cost_func(x, D, reg):
     plt.contourf(xx, yy, loss)
 
 
+def get_plot_level_lines(D, fig=None):
+    if fig is None:
+        fig = plt.figure()
+
+    (xx, yy), X, l1 = get_X_and_l1(D)
+
+    levels = np.r_[1e-10, np.logspace(-2, 1, 20)]
+    norm = colors.LogNorm(vmin=.05, vmax=10, clip=True)
+
+    def plot_level_lines(reg=.4, theta=.5):
+        fig.clear('all')
+        ax = fig.add_subplot(1, 1, 1)
+        x = np.array([np.cos(theta), np.sin(theta)])
+        ax = fig.add_subplot(1, 1, 1)
+        dtf = 0.5 * np.sum((X - x[None, None]) ** 2, axis=-1)
+        loss = dtf + reg * l1
+        i0 = np.unravel_index(loss.argmin(), loss.shape)
+        ax.contourf(xx, yy, loss, levels=levels, norm=norm)
+        plt.scatter(x[0], x[1], c='k')
+        plt.scatter(xx[0, i0[1]], yy[i0[0], 0], c='C1')
+        for dk in D:
+            ax.arrow(-3 * dk[0], -3 * dk[1], 6 * dk[0], 6 * dk[1], alpha=.2)
+            ax.arrow(0, 0, dk[0], dk[1])
+    return plot_level_lines
+
+
 if __name__ == "__main__":
     from adopty.datasets import make_coding
     from adopty.lista import Lista
@@ -74,7 +101,6 @@ if __name__ == "__main__":
     x = D[:1]
 
     n_layers = 5
-    colors = ['r', 'g', 'b']
     plot_coding(x[:n_display], D)
     lista = Lista(D, 40000, parametrization="hessian")
     path = []
