@@ -17,7 +17,7 @@ def grad(z_hat, D, x, lmbd=None, flatten=False, return_func=False):
     n_samples = x.shape[0]
     if flatten:
         z_hat = z_hat.reshape((n_samples, -1))
-    grad = (z_hat.dot(D) - x).dot(D.T) / n_samples
+    grad = (z_hat.dot(D) - x).dot(D.T)
 
     if flatten:
         grad = grad.ravel()

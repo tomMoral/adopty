@@ -28,7 +28,7 @@ def test_ista(reg):
 
     z_hat, cost_ista, *_ = ista(D, x, reg, max_iter=n_iters)
 
-    assert all(np.diff(cost_ista) < 0)
+    assert all(np.diff(cost_ista) <= 0)
     assert all(np.diff(cost_ista) <= 1e-8)
 
 
@@ -50,7 +50,7 @@ def test_fista(reg):
     z_hat_fista, cost_fista, *_ = fista(D, x, reg, max_iter=n_iters)
 
     assert np.isclose(cost_ista[1], cost_fista[1])
-    assert cost_ista[-1] > cost_fista[-1]
+    assert np.isclose(cost_ista[-1], cost_fista[-1])
 
     diff = z_hat_fista - z_hat_ista
     print(diff[abs(diff) > 1e-2])
@@ -104,7 +104,7 @@ def test_grad():
 
     n_dim = 20
     n_atoms = 10
-    n_samples = 10
+    n_samples = 1
     random_state = 42
 
     # Generate a problem

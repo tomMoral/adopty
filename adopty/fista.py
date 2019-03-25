@@ -54,7 +54,7 @@ def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
 
         z_hat_aux = z_hat
         y_hat -= step_size * grad(y_hat, D, x)
-        z_hat = soft_thresholding(y_hat, lmbd * step_size / n_samples)
+        z_hat = soft_thresholding(y_hat, lmbd * step_size)
         diff = z_hat - z_hat_aux
 
         tk_new = (1 + np.sqrt(1 + 4 * tk * tk)) / 2

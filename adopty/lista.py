@@ -58,7 +58,7 @@ class Lista(torch.nn.Module):
                 parameters_layer = parameters_init[i]
             else:
                 if self.parametrization == "lista":
-                    parameters_layer = [self.B / self.L,
+                    parameters_layer = [I_k - self.B / self.L,
                                         self.D.T / self.L]
                 elif self.parametrization == "coupled":
                     parameters_layer = [self.D.T / self.L]
@@ -86,36 +86,35 @@ class Lista(torch.nn.Module):
                              "output_layer={} (n_layers={})"
                              .format(output_layer, self.n_layers))
 
-        n_samples = x.shape[0]
         z_hat = z0
         # Compute the following layers
         for p in self.params[:output_layer]:
             if self.parametrization == "lista":
                 if z_hat is None:
-                    z_hat = x.matmul(p[1]) / n_samples
+                    z_hat = x.matmul(p[1])
                 else:
-                    z_hat = z_hat - (z_hat.matmul(p[0]) -
-                                     x.matmul(p[1])) / n_samples
+                    z_hat = z_hat.matmul(p[0]) + x.matmul(p[1])
             elif self.parametrization == "coupled":
                 if z_hat is None:
-                    z_hat = x.matmul(p[0]) / n_samples
+                    z_hat = x.matmul(p[0])
                 else:
                     res = z_hat.matmul(self.D_) - x
-                    z_hat = z_hat - res.matmul(p[0]) / n_samples
+                    z_hat = z_hat - res.matmul(p[0])
             elif self.parametrization == "hessian":
                 if z_hat is None:
-                    z_hat = x.matmul(self.D_.t()).matmul(p[0]) / n_samples
+                    z_hat = x.matmul(self.D_.t()).matmul(p[0])
                 else:
                     grad = (z_hat.matmul(self.D_) - x).matmul(self.D_.t())
-                    z_hat = z_hat - grad.matmul(p[0]) / n_samples
+                    z_hat = z_hat - grad.matmul(p[0])
             else:
                 raise NotImplementedError()
-            z_hat = torch.nn.functional.softshrink(
-                z_hat, lmbd / (self.L * n_samples))
+            z_hat = torch.nn.functional.softshrink(z_hat, lmbd / self.L)
 
         return z_hat
 
     def fit(self, x, lmbd):
+        # Compat numpy
+        x = check_tensor(x, device=self.device)
 
         if self.verbose > 1:
             # compute fix point
@@ -128,18 +127,10 @@ class Lista(torch.nn.Module):
 
         training_loss = []
 
-        # Compat numpy
-        n_samples = x.shape[0]
-        x = check_tensor(x, device=self.device)
-
-        def loss_fn(z_hat):
-            res = z_hat.matmul(self.D_) - x
-            return (0.5 * (res * res).sum() +
-                    lmbd * torch.abs(z_hat).sum()) / n_samples
-
-        max_iter_per_layer = self.max_iter // self.n_layers
-        max_iter_per_layer = np.diff(np.logspace(0, np.log10(self.max_iter), 4,
-                                                 dtype=int)) + 1000
+        max_iter_per_layer = [self.max_iter // self.n_layers] * self.n_layers
+        # max_iter_per_layer = np.diff(
+        #     np.logspace(0, np.log10(self.max_iter), self.n_layers + 1,
+        #                 dtype=int)) + 1000
 
         for n_layer in range(1, self.n_layers + 1):
             lr = 1
@@ -149,11 +140,11 @@ class Lista(torch.nn.Module):
                 # Compute the forward operator
                 self.zero_grad()
                 z_hat = self(x, lmbd, output_layer=n_layer)
-                loss = loss_fn(z_hat)
-                loss_val = loss.detach().numpy()
+                loss = self.loss_fn(x, lmbd, z_hat)
 
                 # Verbosity of the output
                 if self.verbose > 5 and i % 10 == 0:
+                    loss_val = loss.detach().cpu().numpy()
                     print(i, loss_val - c_star)
                 elif self.verbose > 0 and i % 50 == 0:
                     print("\rFitting model (layer {}/{}): {:7.2%}"
@@ -162,24 +153,35 @@ class Lista(torch.nn.Module):
                           end="", flush=True)
 
                 # Back-tracking line search
-                if len(training_loss) > 0 and training_loss[-1] < loss_val:
+                if len(training_loss) > 0 and torch.le(training_loss[-1],
+                                                       loss):
                     if i + 1 == max_iter:
+                        # In this case, do not perform the last step
                         lr *= 2
                     lr = self.backtrack_parameters(parameters, lr)
                     continue
 
                 # Accepting the previous point
-                training_loss.append(loss_val)
+                training_loss.append(loss)
 
                 # Next gradient iterate
                 loss.backward()
                 lr = self.update_parameters(parameters, lr=lr)
 
-        self.training_loss_ = np.array(training_loss)
+        self.training_loss_ = np.array([loss.detach().cpu().numpy()
+                                        for loss in training_loss])
         print("\rFitting model: done".ljust(80))
 
+    def loss_fn(self, x, lmbd, z_hat):
+        n_samples = x.shape[0]
+        x = check_tensor(x, device=self.device)
+
+        res = z_hat.matmul(self.D_) - x
+        return (0.5 * (res * res).sum() +
+                lmbd * torch.abs(z_hat).sum()) / n_samples
+
     def update_parameters(self, parameters, lr):
-        lr = min(2 * lr, 1e6)
+        lr = min(4 * lr, 1e6)
         self._saved_gradient = []
         for p in parameters:
             if p.grad is None:
@@ -203,6 +205,12 @@ class Lista(torch.nn.Module):
             p.data.add_(lr, g)
         return lr
 
-    def transform(self, x, lmbd, z0=None):
+    def transform(self, x, lmbd, z0=None, output_layer=None):
         with torch.no_grad():
-            return self(x, lmbd, z0=z0)
+            return self(x, lmbd, z0=z0,
+                        output_layer=output_layer).cpu().numpy()
+
+    def score(self, x, lmbd, z0=None):
+        x = check_tensor(x, device=self.device)
+        with torch.no_grad():
+            return self.loss_fn(x, lmbd, self(x, lmbd, z0=z0)).cpu().numpy()

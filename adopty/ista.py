@@ -51,7 +51,7 @@ def ista(D, x, lmbd, z_init=None, max_iter=100):
 
         z_hat -= step_size * grad(z_hat, D, x)
 
-        z_hat = soft_thresholding(z_hat, lmbd * step_size / n_samples)
+        z_hat = soft_thresholding(z_hat, lmbd * step_size)
         times += [time() - t_start_iter]
 
         cost_ista += [cost_lasso(z_hat, D, x, lmbd)]
