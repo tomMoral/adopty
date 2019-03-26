@@ -30,7 +30,6 @@ if __name__ == "__main__":
     n_layers = 3
 
     x_test = np.random.randn(*x.shape)
-    x_test /= abs(x_test.dot(D.T)).max(axis=1, keepdims=True)
 
     format_cost = "{}: {} cost = {:.3e}"
     c_star = get_c_star(x, D, z, reg, device=device)
