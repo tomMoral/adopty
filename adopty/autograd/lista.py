@@ -11,7 +11,8 @@ from functions import (l2_fit, l2_der, logreg_fit, logreg_der, l1_pen, l1_prox,
 from generation import get_lambda_max
 
 
-def _forward(x, weights, p, n_layers, levels, der_function, prox, lbda):
+def _forward(x, weights, p, n_layers, levels, der_function, prox, lbda,
+             scaling):
     '''
     defines the propagation in the network
     '''
@@ -25,7 +26,9 @@ def _forward(x, weights, p, n_layers, levels, der_function, prox, lbda):
         W1 = weights[2 * i]
         W2 = weights[2 * i + 1]
         level = levels[i] * lbda
-        z = prox(z - np.dot(W1, der_function(np.dot(W2, z), x)), level)
+        z = prox(z - np.dot(W1, der_function(np.dot(W2, z), x)),
+                 level[:, None])
+        z = scaling[i][:, None] * z
     return z
 
 
@@ -104,25 +107,27 @@ def _forward_cd(x, weights, p, n_layers, levels, der_function, prox, lbda):
     return z
 
 
-def _sgd(weights, levels, X, gradient_function, full_loss, logger, variables,
-         learn_levels, l_rate=0.001, l_rate_min=1e-6, max_iter=100, thres=0,
-         batch_size=None, log=True, verbose=False, backtrack=False):
+def _sgd(weights, levels, scaling, X, gradient_function, full_loss, logger,
+         variables, learn_levels, learn_scale, l_rate=0.001, l_rate_min=1e-6,
+         max_iter=100, thres=0, batch_size=None, log=True, verbose=False,
+         backtrack=False):
     _, n_samples = X.shape
     if batch_size is None:
         batch_size = n_samples
     old_loss = np.inf
-    loss_value = full_loss((weights, levels), X)
-    idx_to_skip = {'W1': 1, 'W2': 0, 'both': 2}[variables]
+    loss_value = full_loss((weights, levels, scaling), X)
+    idx_to_skip = {'W1': 1, 'W2': 0, 'both': 2, 'spectrum': 1}[variables]
     for i in range(max_iter):
         sl = np.arange(i * batch_size, (i + 1) * batch_size) % n_samples
         x = X[:, sl]
-        gradients = gradient_function((weights, levels), x)
+        gradients = gradient_function((weights, levels, scaling), x)
         if verbose:
             if i % verbose == 0:
                 if not backtrack:
                     loss_value = full_loss((weights, levels), X)
                 gradient_W = np.sum((np.linalg.norm(g) for g in gradients[0]))
                 gradient_l = np.sum((np.linalg.norm(g) for g in gradients[1]))
+                gradient_s = np.sum((np.linalg.norm(g) for g in gradients[2]))
                 if loss_value > old_loss:
                     warnings.warn('loss increasing')
                 old_loss = loss_value
@@ -131,44 +136,56 @@ def _sgd(weights, levels, X, gradient_function, full_loss, logger, variables,
                     logger['grad'].append(gradient_W)
                 if verbose:
                     print('it %d, loss = %.3e, grad_W = %.2e, grad_l = %.2e, '
-                          'l_rate = %.2e' %
-                          (i, loss_value, gradient_W, gradient_l, l_rate))
+                          'grad_s = %.2e, l_rate = %.2e' %
+                          (i, loss_value, gradient_W, gradient_l, gradient_s,
+                           l_rate))
         # Update weights
         old_loss = loss_value
         if backtrack:
-            (weights, levels), loss_value, l_rate =\
-                backtracking(weights, levels, full_loss, gradients, l_rate, x,
-                             idx_to_skip, learn_levels, loss_init=loss_value,
+            (weights, levels, scaling), loss_value, l_rate =\
+                backtracking(weights, levels, scaling, full_loss, gradients,
+                             l_rate, x, idx_to_skip, learn_levels,
+                             learn_scale, variables, loss_init=loss_value,
                              l_rate_min=l_rate_min)
         else:
-            weights, levels = change_params(weights, levels, l_rate,
-                                            gradients, idx_to_skip,
-                                            learn_levels)
+            weights, levels, scaling = change_params(weights, levels, scaling,
+                                                     l_rate, gradients,
+                                                     idx_to_skip, learn_levels,
+                                                     learn_scale, variables)
+        # if learn_scale:
+        #     scaling = levels / weights ** 2
         if np.abs(old_loss - loss_value) / np.abs(loss_value) < thres:
             break
-    return weights, levels
+    return weights, levels, scaling
 
 
-def change_params(weights, levels, l_rate, gradients, idx_to_skip,
-                  learn_levels):
-    for j, (weight, gradient) in enumerate(zip(weights, gradients[0])):
-        if j % 2 == idx_to_skip:
-            continue
-        weight -= l_rate * np.array(gradient)
+def change_params(weights, levels, scaling, l_rate, gradients, idx_to_skip,
+                  learn_levels, learn_scale, variables):
+    if variables != 'spectrum':
+        for j, (weight, gradient) in enumerate(zip(weights, gradients[0])):
+            if j % 2 == idx_to_skip:
+                continue
+            weight -= l_rate * np.array(gradient)
+    else:
+        weights -= l_rate * np.array(gradients[0])
     if learn_levels:
         levels -= l_rate * np.array(gradients[1])
-    return weights, levels
+    if learn_scale:
+        scaling -= l_rate * np.array(gradients[2])
+    return weights, levels, scaling
 
 
-def backtracking(weights, levels, loss, gradients, l_rate, x, idx_to_skip,
-                 learn_levels, loss_init=None, cst_mul=2., n_tries=30,
-                 l_rate_min=1e-6):
+def backtracking(weights, levels, scaling, loss, gradients, l_rate, x,
+                 idx_to_skip, learn_levels, learn_scale, variables,
+                 loss_init=None, cst_mul=2.,  n_tries=30,  l_rate_min=1e-6):
     if loss_init is None:
         loss_init = loss(optim_vars, x)
     l_rate *= cst_mul
     for _ in range(n_tries):
-        new_vars = change_params(deepcopy(weights), np.copy(levels), l_rate,
-                                 gradients, idx_to_skip, learn_levels)
+        new_vars = change_params(deepcopy(weights), np.copy(levels),
+                                 np.copy(scaling), l_rate,
+                                 gradients, idx_to_skip, learn_levels,
+                                 learn_scale, variables)
         new_loss = loss(new_vars, x)
         if new_loss < loss_init or l_rate < l_rate_min:
             break
@@ -183,10 +200,18 @@ def make_loss(fit, pen):
     return loss
 
 
+def spectrum_to_weights(spectra, U, V, D):
+    weights = []
+    for spectrum in spectra:
+        weights.append(np.dot(U * spectrum, V))
+        weights.append(D.copy())
+    return weights
+
+
 class LISTA(object):
     def __init__(self, D, lbda, n_layers=2, fit_loss='l2', reg='l1',
                  variables='W1', learn_levels=False, architecture='pgd',
-                 one_lbda_each=False, lbda_weights=None):
+                 one_lbda_each=False, learn_scale=False, lbda_weights=None):
         '''
         Parameters
         ----------
@@ -217,6 +242,8 @@ class LISTA(object):
             self.lbda_weights = lbda_weights
         self.n_layers = n_layers
         self.architecture = architecture
+        self.learn_scale = learn_scale
+        self.scaling = np.ones((n_layers, self.p))
         if architecture == 'pgd':
             self.L = np.linalg.norm(D, ord=2) ** 2
             if fit_loss == 'logreg':
@@ -228,7 +255,7 @@ class LISTA(object):
         elif architecture == 'cd':
             self.L = np.sum(D ** 2, axis=0)
             self.forward = _forward_cd
-        self.levels = [1. / np.copy(self.L) for _ in range(n_layers)]
+        self.levels = np.ones((n_layers, self.p)) / self.L
         self.B = np.dot(D.T, D)
         self.fit_loss = fit_loss
         self.reg = reg
@@ -256,7 +283,11 @@ class LISTA(object):
         self.one_lbda_each = one_lbda_each
         self.variables = variables
         if self.variables == 'spectrum':
-            self.D_svd = np.linalg.svd(D.T, full_matrices=True)
+            self.D_svd = np.linalg.svd(D.T, full_matrices=False)
+            self.U = self.D_svd[0][:, ::-1]
+            self.V = self.D_svd[2][::-1]
+            self.spectra = np.array([(self.D_svd[1][::-1] / self.L)
+                                     for _ in range(n_layers)])
         self.learn_levels = learn_levels
         self.logger = {}
         self.logger['loss'] = []
@@ -281,7 +312,7 @@ class LISTA(object):
             lbda = lbda_max * lbda
         return self.forward(x, self.weights, self.p, self.n_layers,
                             self.levels, self.der_function, self.prox,
-                            lbda)
+                            lbda, self.scaling)
 
     def compute_loss(self, x):
         if self.compute_lbda_path:
@@ -304,24 +335,39 @@ class LISTA(object):
         self
         '''
         def full_loss(optim_vars, x):
-            weights, levels = optim_vars
+            if self.variables == 'spectrum':
+                spectra, levels, scaling = optim_vars
+                weights = spectrum_to_weights(spectra, self.U, self.V, self.D)
+            else:
+                weights, levels, scaling = optim_vars
             if self.compute_lbda_path:
                 loss = 0.
                 for lbda, w in zip(self.lbda, self.lbda_weights):
-                    z = self.forward(x, weights, self.p, self.n_layers, levels,
-                                     self.der_function, self.prox, lbda)
+                    z = self.forward(x, weights, self.p, self.n_layers,
+                                     levels, self.der_function, self.prox,
+                                     lbda)
                     loss += w * self.loss(z, x, self.D, lbda)
                 return loss
             z = self.forward(x, weights, self.p, self.n_layers, levels,
-                             self.der_function, self.prox, self.lbda)
+                             self.der_function, self.prox, self.lbda, scaling)
             return self.loss(z, x, self.D, self.lbda)
 
         gradient_function = grad(full_loss)
+        if self.variables == 'spectrum':
+            variables = self.spectra
+        else:
+            variables = self.weights
         if solver == 'sgd':
-            weights, levels = _sgd(self.weights, self.levels, X,
-                                   gradient_function, full_loss, self.logger,
-                                   self.variables, self.learn_levels, *args,
-                                   **kwargs)
-        self.weights = weights
+            outputs, levels, scaling =\
+                _sgd(variables, self.levels, self.scaling, X,
+                     gradient_function, full_loss, self.logger, self.variables,
+                     self.learn_levels, self.learn_scale, *args, **kwargs)
+        if self.variables == 'spectrum':
+            self.spectra = outputs
+            self.weights = spectrum_to_weights(self.spectra, self.U, self.V,
+                                               self.D)
+        else:
+            self.weights = outputs
         self.levels = levels
+        self.scaling = scaling
         return self

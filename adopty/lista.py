@@ -171,6 +171,7 @@ class Lista(torch.nn.Module):
         self.training_loss_ = np.array([loss.detach().cpu().numpy()
                                         for loss in training_loss])
         print("\rFitting model: done".ljust(80))
+        return self
 
     def loss_fn(self, x, lmbd, z_hat):
         n_samples = x.shape[0]

@@ -23,13 +23,14 @@ if __name__ == "__main__":
 
     n_dim = 2
     n_atoms = 8
-    n_samples = 10000
+    n_samples = 1000
 
     x, D, z = make_coding(n_samples=n_samples, n_atoms=n_atoms, n_dim=n_dim)
-    reg = .7
+    reg = .8
     n_layers = 3
 
     x_test = np.random.randn(*x.shape)
+    x_test /= abs(x_test.dot(D.T)).max(axis=1, keepdims=True)
 
     format_cost = "{}: {} cost = {:.3e}"
     c_star = get_c_star(x, D, z, reg, device=device)
@@ -40,23 +41,20 @@ if __name__ == "__main__":
                       max_iter=3000, device=device)
 
         z_hat_test = lista.transform(x_test, reg)
-        c_star_test = get_c_star(x_test, D, z_hat_test, reg, device=device)
-        cost_test = cost_lasso(z_hat_test, D, x_test, reg) - c_star_test
+        cost_test = cost_lasso(z_hat_test, D, x_test, reg)
         print(format_cost.format("Un-trained[{}]".format(parametrization),
                                  "test", cost_test))
 
         # Train and evaluate the network
         lista.fit(x, reg)
         z_hat_test = lista.transform(x_test, reg)
-        c_star_test = get_c_star(x_test, D, z_hat_test, reg, device=device)
-        cost_test = cost_lasso(z_hat_test, D, x_test, reg) - c_star_test
+        cost_test = cost_lasso(z_hat_test, D, x_test, reg)
         print(format_cost.format("Trained[{}]".format(parametrization),
                                  "test", cost_test))
         saved_model[parametrization] = lista
 
         z_hat = lista.transform(x, reg)
-        c_star = min(c_star, get_c_star(x, D, z_hat, reg, device=device))
-        plt.loglog(lista.training_loss_ - c_star, label=parametrization)
+        plt.semilogy(lista.training_loss_ - c_star, label=parametrization)
 
     plt.legend()
 
