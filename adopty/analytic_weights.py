@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 
 def obj_func(W, D):
@@ -24,7 +25,7 @@ def proj(W, D):
     return W + (1-aw)[:, None] * D
 
 
-def get_alista_weights(D, max_iter=10000, step_size=1e-1, tol=1e-8):
+def get_alista_weights(D, max_iter=10000, step_size=1e-2, tol=1e-12):
     """Cost function to minimize to obtain the analytic weights
 
     Parameters
@@ -49,3 +50,38 @@ def get_alista_weights(D, max_iter=10000, step_size=1e-1, tol=1e-8):
 
     assert np.allclose(np.diag(W.dot(D.T)), 1)
     return W
+
+
+def plot_weights(W, D):
+
+    n_atoms = D.shape[0]
+    Ik = np.eye(n_atoms, dtype=np.bool)
+
+    fig, axes = plt.subplots(1, 2)
+
+    res = W.dot(D.T) - Ik
+    res0 = D.dot(D.T) - Ik
+
+    ax = axes[0]
+    ax.hist(res[Ik])
+    # ax = axes[0, 1]
+    ax.hist(res0[Ik], alpha=.3)
+
+    ax = axes[1]
+    nIk = Ik == 0
+    ax.hist(res[nIk])
+    # ax = axes[1, 1]
+    ax.hist(res0[nIk], alpha=.3)
+
+    plt.show()
+
+
+if __name__ == "__main__":
+    from adopty.datasets import make_coding
+
+    n_atoms = 100
+    n_dim = 64
+
+    _, D, _ = make_coding(n_atoms=n_atoms, n_dim=n_dim)
+    W = get_alista_weights(D)
+    plot_weights(W, D)
