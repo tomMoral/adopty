@@ -1,12 +1,46 @@
 import torch
 import numpy as np
+import torch.nn.functional as F
 
 from .utils import check_tensor
 from ._compat import AVAILABLE_CONTEXT
 from .loss_and_gradient import cost_lasso
+from .analytic_weights import get_alista_weights
 
 
-PARAMETRIZATIONS = ["lista", "hessian", "coupled"]
+PARAMETRIZATIONS = {
+    "lista": [
+        ('threshold', []),
+        ('Wx', []),
+        ('Wz', []),
+    ],
+    "hessian": [
+        ('threshold', []),
+        ('W_hessian', ["sym"]),
+    ],
+    "coupled": [
+        ('threshold', []),
+        ('W_coupled', []),
+    ],
+    "alista": [
+        ('threshold', []),
+        ('lr', []),
+    ],
+}
+
+
+def symmetric_gradient(p):
+    """Constrain the gradient to be symmetric."""
+    p.grad.data.set_(p.grad.data + p.grad.data.t())
+
+
+GRADIENT_HOOKS = {
+    'sym': symmetric_gradient,
+}
+
+
+def soft_thresholding(z_hat, lmbd):
+    z_hat.sign()
 
 
 class Lista(torch.nn.Module):
@@ -14,9 +48,29 @@ class Lista(torch.nn.Module):
 
     Parameters
     ----------
-
+    D : ndarray, shape (n_atoms, n_dim)
+        Dictionary for the considered sparse coding problem.
+    n_layer : int
+        Number of layers in the network.
+    parametrization : str, (default: "coupled")
+        Parametrization for the weight of the network. Should be one of:
+        - 'lista': original parametrization from Gregor and Le Cun (2010).
+        - 'coupled': one weight parametrization from Chen et al (2018).
+        - 'alista': analytic weights from Chen et al (2019).
+        - 'hessian': one weight parametrization as a quasi newton technique.
+    solver : str, (default: 'gradient_decent')
+        Not implemented for now.
+    max_iter : int (default: 100)
+        Maximal number of iteration for the training of each layer.
+    name : str (default: LISTA)
+        Name of the model.
+    verbose : int (default: 1)
+        Verbosity level.
+    device : str or None (default: None)
+        Device on which the model is implemented. This parameter should be set
+        according to the pytorch API (_eg_ 'cpu', 'gpu', 'gpu/1',..).
     """
-    def __init__(self, D, n_layers, parametrization="lista", solver="sgd",
+    def __init__(self, D, n_layers, parametrization="coupled", solver="sgd",
                  max_iter=100, name="LISTA", ctx=None, verbose=1, device=None):
         if ctx:
             msg = "Context {} is not available on this computer."
@@ -37,11 +91,14 @@ class Lista(torch.nn.Module):
         self.verbose = verbose
         self.n_layers = n_layers
         self.parametrization = parametrization
+        self.pre_gradient_hooks = {"sym": []}
 
         self.D = np.array(D)
         self.D_ = check_tensor(self.D, device=device)
         self.B = D.dot(D.T)
         self.L = np.linalg.norm(self.B, ord=2)
+        if self.parametrization == "alista":
+            self.W = check_tensor(get_alista_weights(self.D).T, device=device)
 
         self.params = []
 
@@ -55,24 +112,29 @@ class Lista(torch.nn.Module):
         self.params = []
         for i in range(self.n_layers):
             if len(parameters_init) > i:
-                parameters_layer = parameters_init[i]
+                layer_params = parameters_init[i]
             else:
+                layer_params = [np.ones(n_atoms) / self.L]
                 if self.parametrization == "lista":
-                    parameters_layer = [I_k - self.B / self.L,
-                                        self.D.T / self.L]
+                    layer_params += [I_k - self.B / self.L, self.D.T / self.L]
                 elif self.parametrization == "coupled":
-                    parameters_layer = [self.D.T / self.L]
+                    layer_params += [self.D.T / self.L]
+                elif self.parametrization == "alista":
+                    layer_params += [np.array(1 / self.L)]
                 elif self.parametrization == "hessian":
-                    parameters_layer = [I_k / self.L]
+                    layer_params += [I_k / self.L]
                 else:
                     raise NotImplementedError()
-            parameters_layer = [
+            parameters_config = PARAMETRIZATIONS[self.parametrization]
+            layer_params = [
                 torch.nn.Parameter(check_tensor(p, device=self.device))
-                for p in parameters_layer]
-            for j, p in enumerate(parameters_layer):
-                self.register_parameter("layer{}-p{}".format(i, j), p)
+                for p in layer_params]
+            for p, (name, hooks) in zip(layer_params, parameters_config):
+                self.register_parameter("layer{}-{}".format(i, name), p)
+                for h in hooks:
+                    self.pre_gradient_hooks[h].append(p)
 
-            self.params += [parameters_layer]
+            self.params += [layer_params]
 
     def forward(self, x, lmbd, z0=None, output_layer=None):
         # Compat numpy
@@ -88,27 +150,37 @@ class Lista(torch.nn.Module):
 
         z_hat = z0
         # Compute the following layers
-        for p in self.params[:output_layer]:
+        for layer_params in self.params[:output_layer]:
             if self.parametrization == "lista":
                 if z_hat is None:
-                    z_hat = x.matmul(p[1])
+                    z_hat = x.matmul(layer_params[2])
                 else:
-                    z_hat = z_hat.matmul(p[0]) + x.matmul(p[1])
+                    z_hat = z_hat.matmul(layer_params[1]) \
+                        + x.matmul(layer_params[2])
             elif self.parametrization == "coupled":
                 if z_hat is None:
-                    z_hat = x.matmul(p[0])
+                    z_hat = x.matmul(layer_params[1])
                 else:
                     res = z_hat.matmul(self.D_) - x
-                    z_hat = z_hat - res.matmul(p[0])
+                    z_hat = z_hat - res.matmul(layer_params[1])
+            elif self.parametrization == "alista":
+                if z_hat is None:
+                    z_hat = x.matmul(self.W) * layer_params[1]
+                else:
+                    res = z_hat.matmul(self.D_) - x
+                    z_hat = z_hat - res.matmul(self.W) * layer_params[1]
             elif self.parametrization == "hessian":
                 if z_hat is None:
-                    z_hat = x.matmul(self.D_.t()).matmul(p[0])
+                    z_hat = x.matmul(self.D_.t()).matmul(layer_params[1])
                 else:
                     grad = (z_hat.matmul(self.D_) - x).matmul(self.D_.t())
-                    z_hat = z_hat - grad.matmul(p[0])
+                    z_hat = z_hat - grad.matmul(layer_params[1])
             else:
                 raise NotImplementedError()
-            z_hat = torch.nn.functional.softshrink(z_hat, lmbd / self.L)
+
+            z_hat = z_hat.sign() * F.relu(z_hat.abs() - lmbd * layer_params[0])
+            # z_hat = torch.nn.functional.softshrink(
+            #     z_hat, lmbd * layer_params[0])
 
         return z_hat
 
@@ -127,7 +199,7 @@ class Lista(torch.nn.Module):
 
         training_loss = []
 
-        max_iter_per_layer = [self.max_iter // self.n_layers] * self.n_layers
+        max_iter_per_layer = [self.max_iter] * self.n_layers
         # max_iter_per_layer = np.diff(
         #     np.logspace(0, np.log10(self.max_iter), self.n_layers + 1,
         #                 dtype=int)) + 1000
@@ -184,17 +256,19 @@ class Lista(torch.nn.Module):
     def update_parameters(self, parameters, lr):
         lr = min(4 * lr, 1e6)
         self._saved_gradient = []
+
+        for hook, list_params in self.pre_gradient_hooks.items():
+            for p in list_params:
+                if p.grad is not None:
+                    GRADIENT_HOOKS[hook](p)
+
         for p in parameters:
             if p.grad is None:
                 self._saved_gradient.append(None)
                 continue
-            if self.parametrization == "hessian":
-                p.data.add_(-lr, p.grad.data + p.grad.data.t())
-                self._saved_gradient.append(
-                    p.grad.data.clone() + p.grad.data.t().clone())
-            else:
-                p.data.add_(-lr, p.grad.data)
-                self._saved_gradient.append(p.grad.data.clone())
+
+            p.data.add_(-lr, p.grad.data)
+            self._saved_gradient.append(p.grad.data.clone())
 
         return lr
 

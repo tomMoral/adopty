@@ -79,9 +79,15 @@ def get_plot_level_lines(D, fig=None):
         ax.contourf(xx, yy, loss, levels=levels, norm=norm)
         plt.scatter(x[0], x[1], c='k')
         plt.scatter(xx[0, i0[1]], yy[i0[0], 0], c='C1')
-        for dk in D:
+        U, s, V = np.linalg.svd(D, full_matrices=False)
+        for dk, uk in zip(D, U):
             ax.arrow(-3 * dk[0], -3 * dk[1], 6 * dk[0], 6 * dk[1], alpha=.2)
             ax.arrow(0, 0, dk[0], dk[1])
+            ax.arrow(0, 0, uk[0], uk[1], color='C1')
+        for vk in V.T:
+            ax.arrow(0, 0, vk[0], vk[1], color='C0')
+        ax.axis('equal')
+
     return plot_level_lines
 
 
