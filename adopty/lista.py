@@ -26,6 +26,9 @@ PARAMETRIZATIONS = {
         ('threshold', []),
         ('lr', []),
     ],
+    "step": [
+        ('step_size', []),
+    ],
 }
 
 
@@ -58,6 +61,7 @@ class Lista(torch.nn.Module):
         - 'coupled': one weight parametrization from Chen et al (2018).
         - 'alista': analytic weights from Chen et al (2019).
         - 'hessian': one weight parametrization as a quasi newton technique.
+        - 'step': only learn a step size
     solver : str, (default: 'gradient_decent')
         Not implemented for now.
     max_iter : int (default: 100)
@@ -114,17 +118,21 @@ class Lista(torch.nn.Module):
             if len(parameters_init) > i:
                 layer_params = parameters_init[i]
             else:
-                layer_params = [np.ones(n_atoms) / self.L]
-                if self.parametrization == "lista":
-                    layer_params += [I_k - self.B / self.L, self.D.T / self.L]
-                elif self.parametrization == "coupled":
-                    layer_params += [self.D.T / self.L]
-                elif self.parametrization == "alista":
-                    layer_params += [np.array(1 / self.L)]
-                elif self.parametrization == "hessian":
-                    layer_params += [I_k / self.L]
+                if self.parametrization == "step":
+                    layer_params = [np.ones(1) / self.L]
                 else:
-                    raise NotImplementedError()
+                    layer_params = [np.ones(n_atoms) / self.L]
+                    if self.parametrization == "lista":
+                        layer_params += [I_k - self.B / self.L,
+                                         self.D.T / self.L]
+                    elif self.parametrization == "coupled":
+                        layer_params += [self.D.T / self.L]
+                    elif self.parametrization == "alista":
+                        layer_params += [np.array(1 / self.L)]
+                    elif self.parametrization == "hessian":
+                        layer_params += [I_k / self.L]
+                    else:
+                        raise NotImplementedError()
             parameters_config = PARAMETRIZATIONS[self.parametrization]
             layer_params = [
                 torch.nn.Parameter(check_tensor(p, device=self.device))
@@ -175,6 +183,12 @@ class Lista(torch.nn.Module):
                 else:
                     grad = (z_hat.matmul(self.D_) - x).matmul(self.D_.t())
                     z_hat = z_hat - grad.matmul(layer_params[1])
+            elif self.parametrization == "step":
+                if z_hat is None:
+                    z_hat = layer_params[0] * x.matmul(self.D_.t()) 
+                else:
+                    res = z_hat.matmul(self.D_) - x
+                    z_hat = z_hat - layer_params[0] * res.matmul(self.D_.t())
             else:
                 raise NotImplementedError()
 
