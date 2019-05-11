@@ -4,7 +4,7 @@ import numpy as np
 from .utils import check_tensor
 from ._compat import AVAILABLE_CONTEXT
 from .loss_and_gradient import cost_lasso
-
+import gc
 
 PARAMETRIZATIONS = ["lista", "hessian", "coupled"]
 
@@ -16,8 +16,9 @@ class Lista(torch.nn.Module):
     ----------
 
     """
-    def __init__(self, D, n_layers, parametrization="lista", solver="sgd",
-                 max_iter=100, name="LISTA", ctx=None, verbose=1, device=None):
+    def __init__(self, D, n_layers, parametrization="lista",
+                 learn_threshold=False, solver="sgd", max_iter=100,
+                 name="LISTA", ctx=None, verbose=1, device=None):
         if ctx:
             msg = "Context {} is not available on this computer."
             assert ctx in AVAILABLE_CONTEXT, msg.format(ctx)
@@ -37,7 +38,7 @@ class Lista(torch.nn.Module):
         self.verbose = verbose
         self.n_layers = n_layers
         self.parametrization = parametrization
-
+        self.learn_threshold = learn_threshold
         self.D = np.array(D)
         self.D_ = check_tensor(self.D, device=device)
         self.B = D.dot(D.T)
@@ -49,6 +50,7 @@ class Lista(torch.nn.Module):
 
     def init_network_parameters(self, parameters_init=[]):
         super().__init__()
+        self._saved_gradient = []
         n_atoms = self.D.shape[0]
         I_k = np.eye(n_atoms)
 
@@ -66,6 +68,8 @@ class Lista(torch.nn.Module):
                     parameters_layer = [I_k / self.L]
                 else:
                     raise NotImplementedError()
+                if self.learn_threshold:
+                    parameters_layer.append(np.array(1 / self.L))
             parameters_layer = [
                 torch.nn.Parameter(check_tensor(p, device=self.device))
                 for p in parameters_layer]
@@ -108,7 +112,12 @@ class Lista(torch.nn.Module):
                     z_hat = z_hat - grad.matmul(p[0])
             else:
                 raise NotImplementedError()
-            z_hat = torch.nn.functional.softshrink(z_hat, lmbd / self.L)
+            if self.learn_threshold:
+                mu = lmbd * p[-1]
+            else:
+                mu = lmbd / self.L
+            z_hat = z_hat.sign() * torch.nn.functional.relu(z_hat.abs() - mu)
+            # z_hat = torch.nn.functional.softshrink(z_hat, mu)
 
         return z_hat
 
@@ -127,7 +136,7 @@ class Lista(torch.nn.Module):
 
         training_loss = []
 
-        max_iter_per_layer = [self.max_iter // self.n_layers] * self.n_layers
+        max_iter_per_layer = [self.max_iter] * self.n_layers
         # max_iter_per_layer = np.diff(
         #     np.logspace(0, np.log10(self.max_iter), self.n_layers + 1,
         #                 dtype=int)) + 1000
@@ -136,7 +145,6 @@ class Lista(torch.nn.Module):
             lr = 1
             max_iter = max_iter_per_layer[n_layer - 1]
             for i in range(max_iter):
-
                 # Compute the forward operator
                 self.zero_grad()
                 z_hat = self(x, lmbd, output_layer=n_layer)
@@ -167,7 +175,7 @@ class Lista(torch.nn.Module):
                 # Next gradient iterate
                 loss.backward()
                 lr = self.update_parameters(parameters, lr=lr)
-
+            gc.collect()
         self.training_loss_ = np.array([loss.detach().cpu().numpy()
                                         for loss in training_loss])
         print("\rFitting model: done".ljust(80))
@@ -183,7 +191,8 @@ class Lista(torch.nn.Module):
 
     def update_parameters(self, parameters, lr):
         lr = min(4 * lr, 1e6)
-        self._saved_gradient = []
+        while len(self._saved_gradient) > 0:
+            del self._saved_gradient[0]
         for p in parameters:
             if p.grad is None:
                 self._saved_gradient.append(None)

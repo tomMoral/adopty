@@ -1,6 +1,7 @@
 import numpy as np
 from matplotlib import colors
 import matplotlib.pyplot as plt
+from itertools import combinations
 
 
 def plot_coding(x, D):
@@ -74,14 +75,26 @@ def get_plot_level_lines(D, fig=None):
         x = np.array([np.cos(theta), np.sin(theta)])
         ax = fig.add_subplot(1, 1, 1)
         dtf = 0.5 * np.sum((X - x[None, None]) ** 2, axis=-1)
-        loss = dtf + reg * l1
+        loss = 0 * dtf + reg * l1
         i0 = np.unravel_index(loss.argmin(), loss.shape)
         ax.contourf(xx, yy, loss, levels=levels, norm=norm)
         plt.scatter(x[0], x[1], c='k')
         plt.scatter(xx[0, i0[1]], yy[i0[0], 0], c='C1')
+        U, S, V = np.linalg.svd(D, full_matrices=False)
         for dk in D:
             ax.arrow(-3 * dk[0], -3 * dk[1], 6 * dk[0], 6 * dk[1], alpha=.2)
             ax.arrow(0, 0, dk[0], dk[1])
+        for u in U:
+            ax.arrow(0, 0, u[0], u[1], color='r')
+        for v in V.T:
+            ax.arrow(0, 0, v[0], v[1], color='b')
+        D_ = np.r_[D, -D]
+        # for c in combinations(range(D_.shape[0]), 2):
+        #     d = D_[c[0]] + D_[c[1]]
+        #     if np.linalg.norm(d) != 0.:
+        #         d /= np.linalg.norm(d)
+        #         ax.arrow(0, 0, d[0], d[1], color='yellow')
+        ax.axis('equal')
     return plot_level_lines
 
 
