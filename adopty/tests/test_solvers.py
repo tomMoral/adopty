@@ -80,7 +80,8 @@ def test_facnet(reg):
 
 @pytest.mark.parametrize('reg', [.1, .3, .5, 2])
 @pytest.mark.parametrize('n_layers', [1, 3, 5, 10, 50, 100])
-@pytest.mark.parametrize('parametrization', ['lista', 'hessian', 'coupled'])
+@pytest.mark.parametrize('parametrization', ['lista', 'hessian', 'coupled',
+                                             'step'])
 def test_lista(reg, n_layers, parametrization):
     n_dim = 20
     n_atoms = 10
