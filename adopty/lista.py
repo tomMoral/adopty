@@ -198,7 +198,9 @@ class Lista(torch.nn.Module):
 
         return z_hat
 
-    def fit(self, x, lmbd):
+    def fit(self, x, lmbd, per_layer='auto'):
+        if per_layer == 'auto':
+            per_layer = self.parametrization != "step"
         # Compat numpy
         x = check_tensor(x, device=self.device)
 
@@ -212,15 +214,13 @@ class Lista(torch.nn.Module):
         parameters = [p for params in self.params for p in params]
 
         training_loss = []
-
-        max_iter_per_layer = [self.max_iter] * self.n_layers
-        # max_iter_per_layer = np.diff(
-        #     np.logspace(0, np.log10(self.max_iter), self.n_layers + 1,
-        #                 dtype=int)) + 1000
-
-        for n_layer in range(1, self.n_layers + 1):
+        if per_layer:
+            layers = range(1, self.n_layers + 1)
+        else:
+            layers = [self.n_layers]
+        for n_layer in layers:
             lr = 1
-            max_iter = max_iter_per_layer[n_layer - 1]
+            max_iter = self.max_iter
             for i in range(max_iter):
 
                 # Compute the forward operator
