@@ -22,6 +22,10 @@ PARAMETRIZATIONS = {
         ('threshold', []),
         ('W_coupled', []),
     ],
+    "coupled_step": [
+        ('step_size', []),
+        ('W_coupled', []),
+    ],
     "alista": [
         ('threshold', []),
         ('lr', []),
@@ -63,7 +67,7 @@ class Lista(torch.nn.Module):
         - 'hessian': one weight parametrization as a quasi newton technique.
         - 'step': only learn a step size
     learn_th : bool (default: True)
-        Either to learn the thresholds or not.
+        Wether to learn the thresholds or not.
     solver : str, (default: 'gradient_decent')
         Not implemented for now.
     max_iter : int (default: 100)
@@ -77,8 +81,8 @@ class Lista(torch.nn.Module):
         according to the pytorch API (_eg_ 'cpu', 'gpu', 'gpu/1',..).
     """
     def __init__(self, D, n_layers, parametrization="coupled", learn_th=True,
-                 solver="sgd", max_iter=100, name="LISTA", ctx=None, verbose=1,
-                 device=None):
+                 solver="gradient_decent", max_iter=100, per_layer='auto',
+                 name="LISTA", ctx=None, verbose=1, device=None):
         if ctx:
             msg = "Context {} is not available on this computer."
             assert ctx in AVAILABLE_CONTEXT, msg.format(ctx)
@@ -90,6 +94,12 @@ class Lista(torch.nn.Module):
                                       "Should be in {}".format(
                                           parametrization, PARAMETRIZATIONS
                                       ))
+        if parametrization in ['step', 'coupled_step'] and not learn_th:
+            raise ValueError("It is not possible to use parametrization "
+                             "with step and learn_th=False")
+
+        if per_layer == 'auto':
+            per_layer = parametrization != "step"
 
         self.max_iter = max_iter
         self.solver = solver
@@ -98,6 +108,7 @@ class Lista(torch.nn.Module):
         self.verbose = verbose
         self.n_layers = n_layers
         self.learn_th = learn_th
+        self.per_layer = per_layer
         self.parametrization = parametrization
         self.pre_gradient_hooks = {"sym": []}
 
@@ -118,9 +129,9 @@ class Lista(torch.nn.Module):
         I_k = np.eye(n_atoms)
 
         self.params = []
-        for i in range(self.n_layers):
-            if len(parameters_init) > i:
-                layer_params = parameters_init[i]
+        for layer in range(self.n_layers):
+            if len(parameters_init) > layer:
+                layer_params = parameters_init[layer]
             else:
                 if self.parametrization == "step":
                     layer_params = [np.ones(1) / self.L]
@@ -133,18 +144,27 @@ class Lista(torch.nn.Module):
                                          self.D.T / self.L]
                     elif self.parametrization == "coupled":
                         layer_params += [self.D.T / self.L]
+                    elif self.parametrization == "coupled_step":
+                        layer_params = [np.ones(1) / self.L, self.D.T]
                     elif self.parametrization == "alista":
                         layer_params += [np.array(1 / self.L)]
                     elif self.parametrization == "hessian":
                         layer_params += [I_k / self.L]
                     else:
                         raise NotImplementedError()
-            parameters_config = PARAMETRIZATIONS[self.parametrization]
+
+            # transform all the parameters to learnable Tensor
             layer_params = [
                 torch.nn.Parameter(check_tensor(p, device=self.device))
                 for p in layer_params]
+
+            # Retrieve parameters hooks and register them
+            parameters_config = PARAMETRIZATIONS[self.parametrization]
+            if not self.learn_th and self.parametrization != "step":
+                parameters_config = parameters_config[1:]
+
             for p, (name, hooks) in zip(layer_params, parameters_config):
-                self.register_parameter("layer{}-{}".format(i, name), p)
+                self.register_parameter("layer{}-{}".format(layer, name), p)
                 for h in hooks:
                     self.pre_gradient_hooks[h].append(p)
 
@@ -176,12 +196,15 @@ class Lista(torch.nn.Module):
                 else:
                     z_hat = z_hat.matmul(layer_params[0]) \
                         + x.matmul(layer_params[1])
-            elif self.parametrization == "coupled":
+            elif "coupled" in self.parametrization:
+                W = layer_params[0]
+                if self.parametrization == "coupled_step":
+                    W = th * W
                 if z_hat is None:
-                    z_hat = x.matmul(layer_params[0])
+                    z_hat = x.matmul(W)
                 else:
                     res = z_hat.matmul(self.D_) - x
-                    z_hat = z_hat - res.matmul(layer_params[0])
+                    z_hat = z_hat - res.matmul(W)
             elif self.parametrization == "alista":
                 if z_hat is None:
                     z_hat = x.matmul(self.W) * layer_params[0]
@@ -208,9 +231,31 @@ class Lista(torch.nn.Module):
 
         return z_hat
 
-    def fit(self, x, lmbd, per_layer='auto'):
-        if per_layer == 'auto':
-            per_layer = self.parametrization != "step"
+    def export_parameters(self):
+        """Return a list with all the parameters of the network.
+
+        This list can be used to init a new network which will have the same
+        output. Usefull to save the parameters.
+        """
+        return [
+            [p.detach().numpy() for p in layer_parameters]
+            for layer_parameters in self.params
+        ]
+
+    def get_parameters(self, name):
+        """Return a list with the parameter name of each layer in the network.
+        """
+        parametrization_config = PARAMETRIZATIONS[self.parametrization]
+        parameter_names = [p_name for p_name, _ in parametrization_config]
+        if name not in parameter_names:
+            raise ValueError("'name' should be in {}".format(parameter_names))
+        idx = parameter_names.index(name)
+        return [
+            layer_parameters[idx].detach().numpy()
+            for layer_parameters in self.params
+        ]
+
+    def fit(self, x, lmbd):
         # Compat numpy
         x = check_tensor(x, device=self.device)
 
@@ -224,13 +269,16 @@ class Lista(torch.nn.Module):
         parameters = [p for params in self.params for p in params]
 
         training_loss = []
-        if per_layer:
+        if self.per_layer:
             layers = range(1, self.n_layers + 1)
+            max_iters = np.diff(np.linspace(
+                0, self.max_iter, self.n_layers + 1, dtype=int))
         else:
             layers = [self.n_layers]
-        for n_layer in layers:
+            max_iters = [self.max_iter]
+        for n_layer, max_iter in zip(layers, max_iters):
             lr = 1
-            max_iter = self.max_iter
+            # max_iter = self.max_iter
             for i in range(max_iter):
 
                 # Compute the forward operator
