@@ -22,11 +22,11 @@ if __name__ == "__main__":
     device = 'cuda' if args.gpu else 'cpu'
 
     n_dim = 2
-    n_atoms = 8
-    n_samples = 1000
+    n_atoms = 3
+    n_samples = 100
 
     x, D, z = make_coding(n_samples=n_samples, n_atoms=n_atoms, n_dim=n_dim)
-    reg = .8
+    reg = .5
     n_layers = 3
 
     x_test = np.random.randn(*x.shape)
@@ -35,7 +35,7 @@ if __name__ == "__main__":
     c_star = get_c_star(x, D, z, reg, device=device)
 
     saved_model = {}
-    for parametrization in ['hessian', 'coupled']:
+    for parametrization in ['hessian', 'coupled', 'step']:
         lista = Lista(D, n_layers, parametrization=parametrization,
                       max_iter=3000, device=device)
 
@@ -45,7 +45,7 @@ if __name__ == "__main__":
                                  "test", cost_test))
 
         # Train and evaluate the network
-        lista.fit(x, reg)
+        lista.fit(x, reg, tol=0)
         z_hat_test = lista.transform(x_test, reg)
         cost_test = cost_lasso(z_hat_test, D, x_test, reg)
         print(format_cost.format("Trained[{}]".format(parametrization),

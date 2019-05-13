@@ -239,8 +239,7 @@ class Lista(torch.nn.Module):
                           end="", flush=True)
 
                 # Back-tracking line search
-                if len(training_loss) > 0 and torch.le(training_loss[-1],
-                                                       loss):
+                if len(training_loss) > 0 and training_loss[-1] <= float(loss):
                     if i + 1 == max_iter:
                         # In this case, do not perform the last step
                         lr *= 2
@@ -248,14 +247,13 @@ class Lista(torch.nn.Module):
                     continue
 
                 # Accepting the previous point
-                training_loss.append(loss)
+                training_loss.append(float(loss))
 
                 # Next gradient iterate
                 loss.backward()
                 lr = self.update_parameters(parameters, lr=lr)
 
-        self.training_loss_ = np.array([loss.detach().cpu().numpy()
-                                        for loss in training_loss])
+        self.training_loss_ = training_loss
         print("\rFitting model: done".ljust(80))
         return self
 
@@ -299,7 +297,8 @@ class Lista(torch.nn.Module):
             return self(x, lmbd, z0=z0,
                         output_layer=output_layer).cpu().numpy()
 
-    def score(self, x, lmbd, z0=None):
+    def score(self, x, lmbd, z0=None, output_layer=None):
         x = check_tensor(x, device=self.device)
         with torch.no_grad():
-            return self.loss_fn(x, lmbd, self(x, lmbd, z0=z0)).cpu().numpy()
+            return self.loss_fn(x, lmbd, self(x, lmbd, z0=z0,
+                                output_layer=output_layer)).cpu().numpy()
