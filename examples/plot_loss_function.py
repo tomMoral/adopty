@@ -4,9 +4,6 @@ import matplotlib.pyplot as plt
 
 from adopty.lista import Lista
 from adopty.datasets import make_coding
-from adopty.loss_and_gradient import cost_lasso
-
-from itertools import combinations
 
 
 mem = Memory(location='.', verbose=0)
@@ -43,9 +40,7 @@ x_list = np.linspace(x_min, x_max, n_samples)
 y_list = np.linspace(y_min, y_max, n_samples)
 
 grid = np.meshgrid(x_list, y_list)
-x_plot = np.zeros((n_samples ** 2, 2))
-for i in [0, 1]:
-    x_plot[:, i] = grid[i].ravel()
+x_plot = np.c_[grid[0].ravel(), grid[1].ravel()]
 
 
 n_reg = 100
@@ -55,7 +50,6 @@ for enum, reg in enumerate(np.linspace(0, 1, n_reg)[1:]):
     z_lasso = Lista(D, 1000).transform(x_plot, reg)
     loss_fit = loss_lasso(z_lasso, x_plot, reg)
 
-
     ista = Lista(D, n_layers)
     z_ista = ista.transform(x_plot, reg)
     z_ista_train = ista.transform(x, reg)
@@ -63,14 +57,12 @@ for enum, reg in enumerate(np.linspace(0, 1, n_reg)[1:]):
     avg_loss = np.mean(loss_lasso(z_ista_train, x, reg))
     print('Ista training loss: {}'.format(avg_loss))
 
-
     # @mem.cache
     def get_trained_lista(D, x, reg, n_layers, max_iter):
 
         lista = Lista(D, n_layers, max_iter=max_iter)
         lista.fit(x, reg)
         return lista
-
 
     lista = get_trained_lista(D, x, reg, n_layers, max_iter=1000)
     z_lista = lista.transform(x_plot, reg)

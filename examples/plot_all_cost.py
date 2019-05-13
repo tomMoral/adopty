@@ -22,7 +22,7 @@ if __name__ == "__main__":
     device = 'cuda' if args.gpu else 'cpu'
 
     n_dim = 2
-    n_atoms = 8
+    n_atoms = 4
     n_samples = 1000
 
     x, D, z = make_coding(n_samples=n_samples, n_atoms=n_atoms, n_dim=n_dim)
@@ -30,14 +30,15 @@ if __name__ == "__main__":
     n_layers = 3
 
     x_test = np.random.randn(*x.shape)
+    x_test /= np.max(abs(x_test.dot(D.T)), axis=1, keepdims=True)
 
     format_cost = "{}: {} cost = {:.3e}"
     c_star = get_c_star(x, D, z, reg, device=device)
 
     saved_model = {}
-    for parametrization in ['hessian', 'coupled']:
+    for parametrization in ['alista', 'hessian', 'coupled']:
         lista = Lista(D, n_layers, parametrization=parametrization,
-                      max_iter=3000, device=device)
+                      max_iter=5000, device=device)
 
         z_hat_test = lista.transform(x_test, reg)
         cost_test = cost_lasso(z_hat_test, D, x_test, reg)

@@ -42,8 +42,8 @@ GRADIENT_HOOKS = {
 }
 
 
-def soft_thresholding(z_hat, lmbd):
-    z_hat.sign()
+def soft_thresholding(z_hat, mu):
+    return z_hat.sign() * F.relu(z_hat.abs() - mu)
 
 
 class Lista(torch.nn.Module):
@@ -62,6 +62,8 @@ class Lista(torch.nn.Module):
         - 'alista': analytic weights from Chen et al (2019).
         - 'hessian': one weight parametrization as a quasi newton technique.
         - 'step': only learn a step size
+    learn_th : bool (default: True)
+        Either to learn the thresholds or not.
     solver : str, (default: 'gradient_decent')
         Not implemented for now.
     max_iter : int (default: 100)
@@ -74,8 +76,9 @@ class Lista(torch.nn.Module):
         Device on which the model is implemented. This parameter should be set
         according to the pytorch API (_eg_ 'cpu', 'gpu', 'gpu/1',..).
     """
-    def __init__(self, D, n_layers, parametrization="coupled", solver="sgd",
-                 max_iter=100, name="LISTA", ctx=None, verbose=1, device=None):
+    def __init__(self, D, n_layers, parametrization="coupled", learn_th=True,
+                 solver="sgd", max_iter=100, name="LISTA", ctx=None, verbose=1,
+                 device=None):
         if ctx:
             msg = "Context {} is not available on this computer."
             assert ctx in AVAILABLE_CONTEXT, msg.format(ctx)
@@ -94,6 +97,7 @@ class Lista(torch.nn.Module):
         self.device = device
         self.verbose = verbose
         self.n_layers = n_layers
+        self.learn_th = learn_th
         self.parametrization = parametrization
         self.pre_gradient_hooks = {"sym": []}
 
@@ -121,7 +125,9 @@ class Lista(torch.nn.Module):
                 if self.parametrization == "step":
                     layer_params = [np.ones(1) / self.L]
                 else:
-                    layer_params = [np.ones(n_atoms) / self.L]
+                    layer_params = []
+                    if self.learn_th:
+                        layer_params += [np.ones(n_atoms) / self.L]
                     if self.parametrization == "lista":
                         layer_params += [I_k - self.B / self.L,
                                          self.D.T / self.L]
@@ -159,31 +165,37 @@ class Lista(torch.nn.Module):
         z_hat = z0
         # Compute the following layers
         for layer_params in self.params[:output_layer]:
+            if self.learn_th and self.parametrization != "step":
+                th = layer_params[0]
+                layer_params = layer_params[1:]
+            else:
+                th = 1 / self.L
             if self.parametrization == "lista":
-                if z_hat is None:
-                    z_hat = x.matmul(layer_params[2])
-                else:
-                    z_hat = z_hat.matmul(layer_params[1]) \
-                        + x.matmul(layer_params[2])
-            elif self.parametrization == "coupled":
                 if z_hat is None:
                     z_hat = x.matmul(layer_params[1])
                 else:
+                    z_hat = z_hat.matmul(layer_params[0]) \
+                        + x.matmul(layer_params[1])
+            elif self.parametrization == "coupled":
+                if z_hat is None:
+                    z_hat = x.matmul(layer_params[0])
+                else:
                     res = z_hat.matmul(self.D_) - x
-                    z_hat = z_hat - res.matmul(layer_params[1])
+                    z_hat = z_hat - res.matmul(layer_params[0])
             elif self.parametrization == "alista":
                 if z_hat is None:
-                    z_hat = x.matmul(self.W) * layer_params[1]
+                    z_hat = x.matmul(self.W) * layer_params[0]
                 else:
                     res = z_hat.matmul(self.D_) - x
-                    z_hat = z_hat - res.matmul(self.W) * layer_params[1]
+                    z_hat = z_hat - res.matmul(self.W) * layer_params[0]
             elif self.parametrization == "hessian":
                 if z_hat is None:
-                    z_hat = x.matmul(self.D_.t()).matmul(layer_params[1])
+                    z_hat = x.matmul(self.D_.t()).matmul(layer_params[0])
                 else:
                     grad = (z_hat.matmul(self.D_) - x).matmul(self.D_.t())
-                    z_hat = z_hat - grad.matmul(layer_params[1])
+                    z_hat = z_hat - grad.matmul(layer_params[0])
             elif self.parametrization == "step":
+                th = layer_params[0]
                 if z_hat is None:
                     z_hat = layer_params[0] * x.matmul(self.D_.t())
                 else:
@@ -192,9 +204,7 @@ class Lista(torch.nn.Module):
             else:
                 raise NotImplementedError()
 
-            z_hat = z_hat.sign() * F.relu(z_hat.abs() - lmbd * layer_params[0])
-            # z_hat = torch.nn.functional.softshrink(
-            #     z_hat, lmbd * layer_params[0])
+            z_hat = soft_thresholding(z_hat, lmbd * th)
 
         return z_hat
 
@@ -269,6 +279,7 @@ class Lista(torch.nn.Module):
 
     def update_parameters(self, parameters, lr):
         lr = min(4 * lr, 1e6)
+
         self._saved_gradient = []
 
         for hook, list_params in self.pre_gradient_hooks.items():
