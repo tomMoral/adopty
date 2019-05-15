@@ -9,30 +9,34 @@ from .analytic_weights import get_alista_weights
 
 
 PARAMETRIZATIONS = {
-    "lista": [
-        ('threshold', []),
-        ('Wx', []),
-        ('Wz', []),
-    ],
-    "hessian": [
-        ('threshold', []),
-        ('W_hessian', ["sym"]),
-    ],
-    "coupled": [
-        ('threshold', []),
-        ('W_coupled', []),
-    ],
-    "coupled_step": [
-        ('step_size', []),
-        ('W_coupled', []),
-    ],
-    "alista": [
-        ('threshold', []),
-        ('lr', []),
-    ],
-    "step": [
-        ('step_size', []),
-    ],
+    "lista": {
+        'threshold': [],
+        'Wx': [],
+        'Wz': [],
+    },
+    "hessian": {
+        'threshold': [],
+        'W_hessian': ["sym"],
+    },
+    "coupled": {
+        'threshold': [],
+        'W_coupled': [],
+    },
+    "coupled_step": {
+        'step_size': [],
+        'W_coupled': [],
+    },
+    "alista": {
+        'threshold': [],
+        'step_size': [],
+    },
+    "step": {
+        'step_size': [],
+    },
+    "first_step": {
+        'step_size': [],
+        'W_coupled': [],
+    },
 }
 
 
@@ -134,38 +138,41 @@ class Lista(torch.nn.Module):
                 layer_params = parameters_init[layer]
             else:
                 if self.parametrization == "step":
-                    layer_params = [np.ones(1) / self.L]
+                    layer_params = dict(step_size=np.array(1 / self.L))
                 else:
-                    layer_params = []
-                    if self.learn_th:
-                        layer_params += [np.ones(n_atoms) / self.L]
+                    layer_params = {}
                     if self.parametrization == "lista":
-                        layer_params += [I_k - self.B / self.L,
-                                         self.D.T / self.L]
+                        layer_params['Wz'] = I_k - self.B / self.L
+                        layer_params['Wx'] = self.D.T / self.L
                     elif self.parametrization == "coupled":
-                        layer_params += [self.D.T / self.L]
+                        layer_params['W_coupled'] = self.D.T / self.L
                     elif self.parametrization == "coupled_step":
-                        layer_params = [np.ones(1) / self.L, self.D.T]
+                        layer_params['W_coupled'] = self.D.T
+                        layer_params['step_size'] = np.array(1 / self.L)
+                    elif self.parametrization == "first_step":
+                        if layer == 0:
+                            layer_params['W_coupled'] = self.D.T
+                        layer_params['step_size'] = np.array(1 / self.L)
                     elif self.parametrization == "alista":
-                        layer_params += [np.array(1 / self.L)]
+                        layer_params['threshold'] = np.array(1 / self.L)
                     elif self.parametrization == "hessian":
-                        layer_params += [I_k / self.L]
+                        layer_params['W_hessian'] = I_k / self.L
                     else:
                         raise NotImplementedError()
+                    if self.learn_th and ('threshold' not in layer_params
+                                          and 'step_size' not in layer_params):
+                        layer_params['threshold'] = np.ones(n_atoms) / self.L
 
             # transform all the parameters to learnable Tensor
-            layer_params = [
-                torch.nn.Parameter(check_tensor(p, device=self.device))
-                for p in layer_params]
+            layer_params = {
+                k: torch.nn.Parameter(check_tensor(p, device=self.device))
+                for k, p in layer_params.items()}
 
             # Retrieve parameters hooks and register them
             parameters_config = PARAMETRIZATIONS[self.parametrization]
-            if not self.learn_th and self.parametrization != "step":
-                parameters_config = parameters_config[1:]
-
-            for p, (name, hooks) in zip(layer_params, parameters_config):
+            for name, p in layer_params.items():
                 self.register_parameter("layer{}-{}".format(layer, name), p)
-                for h in hooks:
+                for h in parameters_config[name]:
                     self.pre_gradient_hooks[h].append(p)
 
             self.params += [layer_params]
@@ -185,47 +192,30 @@ class Lista(torch.nn.Module):
         z_hat = z0
         # Compute the following layers
         for layer_params in self.params[:output_layer]:
-            if self.learn_th and self.parametrization != "step":
-                th = layer_params[0]
-                layer_params = layer_params[1:]
+            if 'threshold' in layer_params:
+                th = layer_params['threshold']
             else:
-                th = 1 / self.L
+                th = layer_params.get('step_size', 1/self.L)
+            step_size = layer_params.get('step_size', 1.)
             if self.parametrization == "lista":
                 if z_hat is None:
-                    z_hat = x.matmul(layer_params[1])
+                    z_hat = x.matmul(layer_params['Wx'])
                 else:
-                    z_hat = z_hat.matmul(layer_params[0]) \
-                        + x.matmul(layer_params[1])
-            elif "coupled" in self.parametrization:
-                W = layer_params[0]
-                if self.parametrization == "coupled_step":
-                    W = th * W
+                    z_hat = z_hat.matmul(layer_params['Wz']) \
+                        + x.matmul(layer_params['Wx'])
+            else:
+                if "W_coupled" in layer_params:
+                    W = layer_params['W_coupled']
+                elif "W_hessian" in layer_params:
+                    W = self.D_.t().matmul(layer_params['W_hessian'])
+                else:
+                    W = self.D_.t()
+                W = W * step_size
                 if z_hat is None:
                     z_hat = x.matmul(W)
                 else:
                     res = z_hat.matmul(self.D_) - x
                     z_hat = z_hat - res.matmul(W)
-            elif self.parametrization == "alista":
-                if z_hat is None:
-                    z_hat = x.matmul(self.W) * layer_params[0]
-                else:
-                    res = z_hat.matmul(self.D_) - x
-                    z_hat = z_hat - res.matmul(self.W) * layer_params[0]
-            elif self.parametrization == "hessian":
-                if z_hat is None:
-                    z_hat = x.matmul(self.D_.t()).matmul(layer_params[0])
-                else:
-                    grad = (z_hat.matmul(self.D_) - x).matmul(self.D_.t())
-                    z_hat = z_hat - grad.matmul(layer_params[0])
-            elif self.parametrization == "step":
-                th = layer_params[0]
-                if z_hat is None:
-                    z_hat = layer_params[0] * x.matmul(self.D_.t())
-                else:
-                    res = z_hat.matmul(self.D_) - x
-                    z_hat = z_hat - layer_params[0] * res.matmul(self.D_.t())
-            else:
-                raise NotImplementedError()
 
             z_hat = soft_thresholding(z_hat, lmbd * th)
 
@@ -238,7 +228,7 @@ class Lista(torch.nn.Module):
         output. Usefull to save the parameters.
         """
         return [
-            [p.detach().numpy() for p in layer_parameters]
+            {k: p.detach().numpy() for k, p in layer_parameters.items()}
             for layer_parameters in self.params
         ]
 
@@ -266,7 +256,7 @@ class Lista(torch.nn.Module):
                 z_hat = self.transform(x, lmbd, z0=z_hat)
             c_star = cost_lasso(z_hat.numpy(), self.D, x, lmbd)
 
-        parameters = [p for params in self.params for p in params]
+        parameters = [p for params in self.params for p in params.values()]
 
         training_loss = []
         if self.per_layer:

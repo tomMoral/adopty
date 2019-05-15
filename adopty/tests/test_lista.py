@@ -62,8 +62,8 @@ def test_save(parametrization, learn_th):
                    learn_th=learn_th)
     lista_.init_network_parameters(parameters_init=parameters)
     parameters_ = lista_.export_parameters()
-    assert [np.allclose(p, p_) for pl, pl_ in zip(parameters, parameters_)
-            for p, p_ in zip(pl, pl_)]
+    assert np.all([np.allclose(pl[k], pl_[k])
+                   for pl, pl_ in zip(parameters, parameters_) for k in pl])
 
     cost_lista = lista.score(x, reg)
     cost_lista_ = lista_.score(x, reg)
