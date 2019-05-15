@@ -154,6 +154,7 @@ class Lista(torch.nn.Module):
                             layer_params['W_coupled'] = self.D.T
                         layer_params['step_size'] = np.array(1 / self.L)
                     elif self.parametrization == "alista":
+                        layer_params['step_size'] = np.array(1 / self.L)
                         layer_params['threshold'] = np.array(1 / self.L)
                     elif self.parametrization == "hessian":
                         layer_params['W_hessian'] = I_k / self.L
@@ -208,6 +209,8 @@ class Lista(torch.nn.Module):
                     W = layer_params['W_coupled']
                 elif "W_hessian" in layer_params:
                     W = self.D_.t().matmul(layer_params['W_hessian'])
+                elif self.parametrization == "alista":
+                    W = self.W
                 else:
                     W = self.D_.t()
                 W = W * step_size
