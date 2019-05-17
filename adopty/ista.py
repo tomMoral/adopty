@@ -7,7 +7,7 @@ from time import time
 from .loss_and_gradient import cost_lasso, grad, soft_thresholding
 
 
-def ista(D, x, lmbd, z_init=None, max_iter=100):
+def ista(D, x, lmbd, z_init=None, max_iter=100, tol=0):
     """ISTA for resolution of the sparse coding
 
     Parameters
@@ -55,5 +55,8 @@ def ista(D, x, lmbd, z_init=None, max_iter=100):
         times += [time() - t_start_iter]
 
         cost_ista += [cost_lasso(z_hat, D, x, lmbd)]
+
+        if cost_ista[-1] - cost_ista[-2] < tol:
+            break
 
     return z_hat, cost_ista, times

@@ -59,8 +59,7 @@ def test_save(parametrization, learn_th):
     parameters = lista.export_parameters()
 
     lista_ = Lista(D, n_layers, parametrization=parametrization,
-                   learn_th=learn_th)
-    lista_.init_network_parameters(parameters_init=parameters)
+                   learn_th=learn_th, initial_parameters=parameters)
     parameters_ = lista_.export_parameters()
     assert np.all([np.allclose(pl[k], pl_[k])
                    for pl, pl_ in zip(parameters, parameters_) for k in pl])

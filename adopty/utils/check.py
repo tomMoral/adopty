@@ -21,7 +21,7 @@ def check_random_state(seed):
 
 
 def check_tensor(x, device=None):
-    if isinstance(x, np.ndarray):
+    if isinstance(x, np.ndarray) or type(x) in [int, float]:
         x = torch.Tensor(x)
     if isinstance(x, torch.Tensor):
         return x.to(device=device, dtype=torch.float64)

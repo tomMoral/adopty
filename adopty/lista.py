@@ -22,10 +22,6 @@ PARAMETRIZATIONS = {
         'threshold': [],
         'W_coupled': [],
     },
-    "coupled_step": {
-        'step_size': [],
-        'W_coupled': [],
-    },
     "alista": {
         'threshold': [],
         'step_size': [],
@@ -35,6 +31,7 @@ PARAMETRIZATIONS = {
     },
     "first_step": {
         'step_size': [],
+        'threshold': [],
         'W_coupled': [],
     },
 }
@@ -85,8 +82,9 @@ class Lista(torch.nn.Module):
         according to the pytorch API (_eg_ 'cpu', 'gpu', 'gpu/1',..).
     """
     def __init__(self, D, n_layers, parametrization="coupled", learn_th=True,
-                 solver="gradient_decent", max_iter=100, per_layer='auto',
-                 name="LISTA", ctx=None, verbose=1, device=None):
+                 solver="gradient_descent", max_iter=100, per_layer='auto',
+                 initial_parameters=[], name="LISTA", ctx=None, verbose=1,
+                 device=None):
         if ctx:
             msg = "Context {} is not available on this computer."
             assert ctx in AVAILABLE_CONTEXT, msg.format(ctx)
@@ -103,7 +101,10 @@ class Lista(torch.nn.Module):
                              "with step and learn_th=False")
 
         if per_layer == 'auto':
-            per_layer = parametrization != "step"
+            if parametrization == 'step':
+                per_layer = 'oneshot'
+            else:
+                per_layer = "recursive"
 
         self.max_iter = max_iter
         self.solver = solver
@@ -123,60 +124,9 @@ class Lista(torch.nn.Module):
         if self.parametrization == "alista":
             self.W = check_tensor(get_alista_weights(self.D).T, device=device)
 
-        self.params = []
+        self.layers_parameters = []
 
-        self.init_network_parameters()
-
-    def init_network_parameters(self, parameters_init=[]):
-        super().__init__()
-        n_atoms = self.D.shape[0]
-        I_k = np.eye(n_atoms)
-
-        self.params = []
-        for layer in range(self.n_layers):
-            if len(parameters_init) > layer:
-                layer_params = parameters_init[layer]
-            else:
-                if self.parametrization == "step":
-                    layer_params = dict(step_size=np.array(1 / self.L))
-                else:
-                    layer_params = {}
-                    if self.parametrization == "lista":
-                        layer_params['Wz'] = I_k - self.B / self.L
-                        layer_params['Wx'] = self.D.T / self.L
-                    elif self.parametrization == "coupled":
-                        layer_params['W_coupled'] = self.D.T / self.L
-                    elif self.parametrization == "coupled_step":
-                        layer_params['W_coupled'] = self.D.T
-                        layer_params['step_size'] = np.array(1 / self.L)
-                    elif self.parametrization == "first_step":
-                        if layer == 0:
-                            layer_params['W_coupled'] = self.D.T
-                        layer_params['step_size'] = np.array(1 / self.L)
-                    elif self.parametrization == "alista":
-                        layer_params['step_size'] = np.array(1 / self.L)
-                        layer_params['threshold'] = np.array(1 / self.L)
-                    elif self.parametrization == "hessian":
-                        layer_params['W_hessian'] = I_k / self.L
-                    else:
-                        raise NotImplementedError()
-                    if self.learn_th and ('threshold' not in layer_params
-                                          and 'step_size' not in layer_params):
-                        layer_params['threshold'] = np.ones(n_atoms) / self.L
-
-            # transform all the parameters to learnable Tensor
-            layer_params = {
-                k: torch.nn.Parameter(check_tensor(p, device=self.device))
-                for k, p in layer_params.items()}
-
-            # Retrieve parameters hooks and register them
-            parameters_config = PARAMETRIZATIONS[self.parametrization]
-            for name, p in layer_params.items():
-                self.register_parameter("layer{}-{}".format(layer, name), p)
-                for h in parameters_config[name]:
-                    self.pre_gradient_hooks[h].append(p)
-
-            self.params += [layer_params]
+        self._init_network_parameters(initial_parameters=initial_parameters)
 
     def forward(self, x, lmbd, z0=None, output_layer=None):
         # Compat numpy
@@ -192,12 +142,13 @@ class Lista(torch.nn.Module):
 
         z_hat = z0
         # Compute the following layers
-        for layer_params in self.params[:output_layer]:
+        for layer_params in self.layers_parameters[:output_layer]:
             if 'threshold' in layer_params:
                 th = layer_params['threshold']
             else:
                 th = layer_params.get('step_size', 1/self.L)
             step_size = layer_params.get('step_size', 1.)
+            # z_old = z_hat if z_hat else 0
             if self.parametrization == "lista":
                 if z_hat is None:
                     z_hat = x.matmul(layer_params['Wx'])
@@ -221,6 +172,9 @@ class Lista(torch.nn.Module):
                     z_hat = z_hat - res.matmul(W)
 
             z_hat = soft_thresholding(z_hat, lmbd * th)
+            # Early break if not moving enough
+            # if (z_hat - z_old).abs().max() < 0:
+            #     break
 
         return z_hat
 
@@ -232,25 +186,145 @@ class Lista(torch.nn.Module):
         """
         return [
             {k: p.detach().numpy() for k, p in layer_parameters.items()}
-            for layer_parameters in self.params
+            for layer_parameters in self.layers_parameters
         ]
 
     def get_parameters(self, name):
         """Return a list with the parameter name of each layer in the network.
         """
-        parametrization_config = PARAMETRIZATIONS[self.parametrization]
-        parameter_names = [p_name for p_name, _ in parametrization_config]
-        if name not in parameter_names:
-            raise ValueError("'name' should be in {}".format(parameter_names))
-        idx = parameter_names.index(name)
         return [
-            layer_parameters[idx].detach().numpy()
-            for layer_parameters in self.params
+            layer_parameters[name].detach().numpy()
+            if name in layer_parameters else None
+            for layer_parameters in self.layers_parameters
         ]
 
+    def set_parameters(self, name, values, offset=None):
+        """Return a list with the parameter name of each layer in the network.
+        """
+        layers_parameters = self.layers_parameters[offset:]
+        if type(values) != list:
+            values = [values] * len(layers_parameters)
+        for layer_parameters, value in zip(layers_parameters, values):
+            if name in layer_parameters:
+                layer_parameters[name].data = check_tensor(value)
+
     def fit(self, x, lmbd):
+        """Compute the output of the network, given x and regularization lmbd
+
+        Parameters
+        ----------
+        x : ndarray, shape (n_samples, n_dim)
+            input of the network.
+        lmbd: float
+            Regularization level for the optimization problem.
+        """
         # Compat numpy
         x = check_tensor(x, device=self.device)
+
+        if self.solver == "gradient_descent":
+            self._fit_batch_gradient_descent(x, lmbd)
+        else:
+            raise NotImplementedError("'solver' parameter should be in "
+                                      "{'gradient_descent'}")
+
+    def transform(self, x, lmbd, z0=None, output_layer=None):
+        """Compute the output of the network, given x and regularization lmbd
+
+        Parameters
+        ----------
+        x : ndarray, shape (n_samples, n_dim)
+            input of the network.
+        lmbd: float
+            Regularization level for the optimization problem.
+        z0 : ndarray, shape (n_samples, n_atoms) (default: None)
+            Initial point for the optimization algorithm. If None, the
+            algorithm starts from 0
+        output_layer : int (default: None)
+            Layer to output from. It should be smaller than the number of
+            layers of the network. If set to None, output the last layer of the
+            network.
+        """
+        with torch.no_grad():
+            return self(x, lmbd, z0=z0,
+                        output_layer=output_layer).cpu().numpy()
+
+    def score(self, x, lmbd, z0=None, output_layer=None):
+        """Compute the loss for the network's output
+
+        Parameters
+        ----------
+        x : ndarray, shape (n_samples, n_dim)
+            input of the network.
+        lmbd: float
+            Regularization level for the optimization problem.
+        z0 : ndarray, shape (n_samples, n_atoms) (default: None)
+            Initial point for the optimization algorithm. If None, the
+            algorithm starts from 0
+        output_layer : int (default: None)
+            Layer to output from. It should be smaller than the number of
+            layers of the network. Ifs set to None, output the network's last
+            layer.
+        """
+        x = check_tensor(x, device=self.device)
+        with torch.no_grad():
+            return self._loss_fn(x, lmbd, self(x, lmbd, z0=z0,
+                                 output_layer=output_layer)).cpu().numpy()
+
+    def _init_network_parameters(self, initial_parameters=[]):
+        """Initialize the parameters of the network
+        """
+        super().__init__()
+        n_atoms = self.D.shape[0]
+        I_k = np.eye(n_atoms)
+
+        parameters_config = PARAMETRIZATIONS[self.parametrization]
+
+        self.layers_parameters = []
+        for layer in range(self.n_layers):
+            if len(initial_parameters) > layer:
+                layer_params = initial_parameters[layer]
+            else:
+                if self.parametrization == "step":
+                    layer_params = dict(step_size=np.array(1 / self.L))
+                else:
+                    layer_params = {}
+                    if self.learn_th and 'threshold' in parameters_config:
+                        layer_params['threshold'] = np.ones(n_atoms) / self.L
+                    if self.parametrization == "lista":
+                        layer_params['Wz'] = I_k - self.B / self.L
+                        layer_params['Wx'] = self.D.T / self.L
+                    elif self.parametrization == "coupled":
+                        layer_params['W_coupled'] = self.D.T / self.L
+                    elif self.parametrization == "first_step":
+                        if layer == 0:
+                            layer_params['W_coupled'] = self.D.T / self.L
+                            layer_params['threshold'] = np.array(1 / self.L)
+                        else:
+                            layer_params['step_size'] = np.array(1 / self.L)
+                            del layer_params['threshold']
+                    elif self.parametrization == "alista":
+                        layer_params['step_size'] = np.array(1 / self.L)
+                        layer_params['threshold'] = np.array(1 / self.L)
+                    elif self.parametrization == "hessian":
+                        layer_params['W_hessian'] = I_k / self.L
+                    else:
+                        raise NotImplementedError()
+
+            # transform all the parameters to learnable Tensor
+            layer_params = {
+                k: torch.nn.Parameter(check_tensor(p, device=self.device))
+                for k, p in layer_params.items()}
+
+            # Retrieve parameters hooks and register them
+
+            for name, p in layer_params.items():
+                self.register_parameter("layer{}-{}".format(layer, name), p)
+                for h in parameters_config[name]:
+                    self.pre_gradient_hooks[h].append(p)
+
+            self.layers_parameters += [layer_params]
+
+    def _fit_batch_gradient_descent(self, x, lmbd):
 
         if self.verbose > 1:
             # compute fix point
@@ -259,25 +333,40 @@ class Lista(torch.nn.Module):
                 z_hat = self.transform(x, lmbd, z0=z_hat)
             c_star = cost_lasso(z_hat.numpy(), self.D, x, lmbd)
 
-        parameters = [p for params in self.params for p in params.values()]
+        parameters = [p for layer_parameters in self.layers_parameters
+                      for p in layer_parameters.values()]
 
         training_loss = []
-        if self.per_layer:
+        norm_gradients = []
+        if self.per_layer == 'oneshot':
+            layers = [self.n_layers]
+            max_iters = [self.max_iter]
+        else:
             layers = range(1, self.n_layers + 1)
             max_iters = np.diff(np.linspace(
                 0, self.max_iter, self.n_layers + 1, dtype=int))
-        else:
-            layers = [self.n_layers]
-            max_iters = [self.max_iter]
         for n_layer, max_iter in zip(layers, max_iters):
             lr = 1
-            # max_iter = self.max_iter
-            for i in range(max_iter):
+
+            if self.per_layer == "greedy":
+                parameters = [
+                    p for lp in self.layers_parameters[:n_layer]
+                    for p in lp.values()
+                ]
+            else:
+                parameters = [
+                    p for lp in self.layers_parameters for p in lp.values()
+                ]
+            i = 0
+            while i < max_iter:
 
                 # Compute the forward operator
                 self.zero_grad()
-                z_hat = self(x, lmbd, output_layer=n_layer)
-                loss = self.loss_fn(x, lmbd, z_hat)
+                if self.per_layer == "recursive":
+                    z_hat = self(x, lmbd, output_layer=n_layer)
+                else:
+                    z_hat = self(x, lmbd)
+                loss = self._loss_fn(x, lmbd, z_hat)
 
                 # Verbosity of the output
                 if self.verbose > 5 and i % 10 == 0:
@@ -290,25 +379,29 @@ class Lista(torch.nn.Module):
                           end="", flush=True)
 
                 # Back-tracking line search
-                if len(training_loss) > 0 and training_loss[-1] <= float(loss):
-                    if i + 1 == max_iter:
-                        # In this case, do not perform the last step
-                        lr *= 2
-                    lr = self.backtrack_parameters(parameters, lr)
+                if len(training_loss) > 0 and training_loss[-1] < float(loss):
+                    lr = self._backtrack_parameters(parameters, lr)
+                    if lr < 1e-20:
+                        print(f"\rConverged, step_size={lr:.2e}, "
+                              f"norm_g={norm_gradients[-1]:.2e}")
+                        break
                     continue
 
                 # Accepting the previous point
                 training_loss.append(float(loss))
+                i += 1
 
                 # Next gradient iterate
                 loss.backward()
-                lr = self.update_parameters(parameters, lr=lr)
+                lr, norm_g = self._update_parameters(parameters, lr=lr)
+                norm_gradients.append(norm_g)
 
         self.training_loss_ = training_loss
+        self.norm_gradients = norm_gradients
         print("\rFitting model: done".ljust(80))
         return self
 
-    def loss_fn(self, x, lmbd, z_hat):
+    def _loss_fn(self, x, lmbd, z_hat):
         n_samples = x.shape[0]
         x = check_tensor(x, device=self.device)
 
@@ -316,8 +409,8 @@ class Lista(torch.nn.Module):
         return (0.5 * (res * res).sum() +
                 lmbd * torch.abs(z_hat).sum()) / n_samples
 
-    def update_parameters(self, parameters, lr):
-        lr = min(4 * lr, 1e6)
+    def _update_parameters(self, parameters, lr):
+        lr = min(4 * lr, 1e12)
 
         self._saved_gradient = []
 
@@ -326,31 +419,22 @@ class Lista(torch.nn.Module):
                 if p.grad is not None:
                     GRADIENT_HOOKS[hook](p)
 
-        for p in parameters:
+        norm_g = 0
+        for i, p in enumerate(parameters):
             if p.grad is None:
                 self._saved_gradient.append(None)
                 continue
 
             p.data.add_(-lr, p.grad.data)
             self._saved_gradient.append(p.grad.data.clone())
+            norm_g = max(norm_g, p.grad.data.detach().abs().max())
 
-        return lr
+        return lr, float(norm_g)
 
-    def backtrack_parameters(self, parameters, lr):
+    def _backtrack_parameters(self, parameters, lr):
         lr /= 2
         for p, g in zip(parameters, self._saved_gradient):
             if g is None:
                 continue
             p.data.add_(lr, g)
         return lr
-
-    def transform(self, x, lmbd, z0=None, output_layer=None):
-        with torch.no_grad():
-            return self(x, lmbd, z0=z0,
-                        output_layer=output_layer).cpu().numpy()
-
-    def score(self, x, lmbd, z0=None, output_layer=None):
-        x = check_tensor(x, device=self.device)
-        with torch.no_grad():
-            return self.loss_fn(x, lmbd, self(x, lmbd, z0=z0,
-                                output_layer=output_layer)).cpu().numpy()
