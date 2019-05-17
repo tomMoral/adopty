@@ -48,7 +48,6 @@ def oracle_ista(D, x, lmbd, z_init=None, max_iter=100):
     times : list
         Time taken by each iteration
     """
-    n_samples = x.shape[0]
     n_atoms = D.shape[0]
 
     L = np.linalg.norm(D.dot(D.T), 2)
@@ -58,7 +57,7 @@ def oracle_ista(D, x, lmbd, z_init=None, max_iter=100):
     else:
         z_hat = np.zeros(n_atoms)
     times = []
-    cost_ista = [cost_lasso(z_hat, D, x, lmbd) * n_samples]
+    cost_ista = [cost_lasso(z_hat[None, :], D, x[None, :], lmbd)]
     steps = []
     for _ in range(max_iter):
         t_start_iter = time()
@@ -76,9 +75,9 @@ def oracle_ista(D, x, lmbd, z_init=None, max_iter=100):
         else:   # bad step
             step_size = 1 / L
             z_hat = one_ista(x, D, z_hat, lmbd, step_size)
-            cost_ista += [cost_lasso(z_hat, D, x, lmbd) * n_samples]
+            cost_ista += [cost_lasso(z_hat[None, :], D, x[None, :], lmbd)]
             steps.append(step_size)
         steps.append(step_size)
         times += [time() - t_start_iter]
-        cost_ista += [cost_lasso(z_hat, D, x, lmbd) * n_samples]
+        cost_ista += [cost_lasso(z_hat[None, :], D, x[None, :], lmbd)]
     return z_hat, cost_ista, times, steps
