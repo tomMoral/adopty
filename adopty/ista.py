@@ -56,7 +56,7 @@ def ista(D, x, lmbd, z_init=None, max_iter=100, tol=0):
 
         cost_ista += [cost_lasso(z_hat, D, x, lmbd)]
 
-        if cost_ista[-1] - cost_ista[-2] < tol:
+        if cost_ista[-2] - cost_ista[-1] < tol:
             break
 
     return z_hat, cost_ista, times
