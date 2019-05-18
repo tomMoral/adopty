@@ -7,7 +7,7 @@ from time import time
 from .loss_and_gradient import cost_lasso, grad, soft_thresholding
 
 
-def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
+def fista(D, x, lmbd, z_init=None, max_iter=100, stopping_criterion=None):
     """FISTA for resolution of the sparse coding
 
     Parameters
@@ -22,6 +22,9 @@ def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
         Initial value of the activation codes
     max_iter : int
         Maximal number of iteration for ISTA
+    stopping_critrion: callable or None
+        If it is a callable, it is call with the list of the past costs
+        and the algorithm is stopped if it returns True.
 
     Returns
     -------
@@ -63,8 +66,9 @@ def fista(D, x, lmbd, z_init=None, max_iter=100, tol=1e-8):
 
         times += [time() - t_start_iter]
         cost_ista += [cost_lasso(z_hat, D, x, lmbd)]
-        dz = diff.ravel().dot(diff.ravel())
-        if dz < tol:
+
+        # Stopping criterion for the convergence
+        if callable(stopping_criterion) and stopping_criterion(cost_ista):
             break
 
     return z_hat, cost_ista, times

@@ -23,7 +23,8 @@ def one_ista(x, D, z, lmbd, step_size):
     return soft_thresholding(y, lmbd * step_size)
 
 
-def oracle_ista(D, x, lmbd, z_init=None, max_iter=100):
+def oracle_ista(D, x, lmbd, z_init=None, max_iter=100,
+                stopping_criterion=None):
     """Oracle ISTA for resolution of the sparse coding
 
     Parameters
@@ -38,6 +39,9 @@ def oracle_ista(D, x, lmbd, z_init=None, max_iter=100):
         Initial value of the activation codes
     max_iter : int
         Maximal number of iteration for ISTA
+    stopping_critrion: callable or None
+        If it is a callable, it is call with the list of the past costs
+        and the algorithm is stopped if it returns True.
 
     Returns
     -------
@@ -60,7 +64,9 @@ def oracle_ista(D, x, lmbd, z_init=None, max_iter=100):
     cost_ista = [cost_lasso(z_hat[None, :], D, x[None, :], lmbd)]
     steps = []
     for _ in range(max_iter):
-        t_start_iter = time()
+        # Compute the step size based on the Lipschitz constant of the current
+        # support. This is not included in the time computation as we consider
+        # this is given by an oracle.
         support = z_hat != 0
         size = np.sum(support)
         if size == 0:  # anoying case
@@ -68,6 +74,10 @@ def oracle_ista(D, x, lmbd, z_init=None, max_iter=100):
         else:
             idx = np.where(support)[0]
             step_size = oracle_step(D[idx])
+
+        # Compute the iteration with the given step size and fall back in
+        # case the step is not safe
+        t_start_iter = time()
         y_hat = one_ista(x, D, z_hat, lmbd, step_size)
         support_y = y_hat != 0
         if np.sum(support_y * support) == np.sum(support_y):  # good step
@@ -77,7 +87,14 @@ def oracle_ista(D, x, lmbd, z_init=None, max_iter=100):
             z_hat = one_ista(x, D, z_hat, lmbd, step_size)
             cost_ista += [cost_lasso(z_hat[None, :], D, x[None, :], lmbd)]
             steps.append(step_size)
+
+        # Log the cost and the time
+        times.append(time() - t_start_iter)
         steps.append(step_size)
-        times += [time() - t_start_iter]
-        cost_ista += [cost_lasso(z_hat[None, :], D, x[None, :], lmbd)]
+        cost_ista.append(cost_lasso(z_hat[None, :], D, x[None, :], lmbd))
+
+        # Stopping criterion for the convergence
+        if callable(stopping_criterion) and stopping_criterion(cost_ista):
+            break
+
     return z_hat, cost_ista, times, steps

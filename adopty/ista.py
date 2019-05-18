@@ -7,7 +7,7 @@ from time import time
 from .loss_and_gradient import cost_lasso, grad, soft_thresholding
 
 
-def ista(D, x, lmbd, z_init=None, max_iter=100, tol=0):
+def ista(D, x, lmbd, z_init=None, max_iter=100, stopping_criterion=None):
     """ISTA for resolution of the sparse coding
 
     Parameters
@@ -22,6 +22,9 @@ def ista(D, x, lmbd, z_init=None, max_iter=100, tol=0):
         Initial value of the activation codes
     max_iter : int
         Maximal number of iteration for ISTA
+    stopping_critrion: callable or None
+        If it is a callable, it is call with the list of the past costs
+        and the algorithm is stopped if it returns True.
 
     Returns
     -------
@@ -56,7 +59,8 @@ def ista(D, x, lmbd, z_init=None, max_iter=100, tol=0):
 
         cost_ista += [cost_lasso(z_hat, D, x, lmbd)]
 
-        if cost_ista[-2] - cost_ista[-1] < tol:
+        # Stopping criterion for the convergence
+        if callable(stopping_criterion) and stopping_criterion(cost_ista):
             break
 
     return z_hat, cost_ista, times
