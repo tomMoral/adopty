@@ -1,7 +1,18 @@
 import numpy as np
 from matplotlib import colors
 import matplotlib.pyplot as plt
-from itertools import combinations
+
+
+def color_palette(n_colors=4, cmap='viridis', extrema=False):
+    """Create a color palette from a matplotlib color map"""
+    if extrema:
+        bins = np.linspace(0, 1, n_colors)
+    else:
+        bins = np.linspace(0, 1, n_colors * 2 - 1 + 2)[1:-1:2]
+
+    cmap = plt.get_cmap(cmap)
+    palette = list(map(tuple, cmap(bins)[:, :3]))
+    return palette
 
 
 def plot_coding(x, D):
