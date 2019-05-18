@@ -102,11 +102,6 @@ def colorify(message, color=BLUE):
     return ("\033[1;%dm" % color) + message + "\033[0m"
 
 
-#################################################
-# Iteration over parameter settings and functions
-#################################################
-
-
 if __name__ == '__main__':
 
     n_dims = 100

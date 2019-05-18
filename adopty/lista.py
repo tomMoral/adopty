@@ -106,14 +106,18 @@ class Lista(torch.nn.Module):
             else:
                 per_layer = "recursive"
 
-        self.max_iter = max_iter
-        self.solver = solver
+        self.name = name
         self._ctx = ctx
         self.device = device
         self.verbose = verbose
-        self.n_layers = n_layers
-        self.learn_th = learn_th
+
+        self.solver = solver
+        self.max_iter = max_iter
         self.per_layer = per_layer
+
+        self.n_layers = n_layers
+
+        self.learn_th = learn_th
         self.parametrization = parametrization
         self.pre_gradient_hooks = {"sym": []}
 
@@ -270,6 +274,29 @@ class Lista(torch.nn.Module):
             return self._loss_fn(x, lmbd, self(x, lmbd, z0=z0,
                                  output_layer=output_layer)).cpu().numpy()
 
+    def compute_loss(self, x, lmbd, z0=None):
+        """Compute the loss for the network's output at each layer
+
+        Parameters
+        ----------
+        x : ndarray, shape (n_samples, n_dim)
+            input of the network.
+        lmbd: float
+            Regularization level for the optimization problem.
+        z0 : ndarray, shape (n_samples, n_atoms) (default: None)
+            Initial point for the optimization algorithm. If None, the
+            algorithm starts from 0
+        """
+        x = check_tensor(x, device=self.device)
+        loss = []
+        with torch.no_grad():
+            for output_layer in range(self.n_layers):
+                loss.append(self._loss_fn(
+                    x, lmbd,
+                    self(x, lmbd, z0=z0, output_layer=output_layer + 1)
+                    ).cpu().numpy())
+        return np.array(loss)
+
     def _init_network_parameters(self, initial_parameters=[]):
         """Initialize the parameters of the network
         """
@@ -382,7 +409,8 @@ class Lista(torch.nn.Module):
                 if len(training_loss) > 0 and training_loss[-1] < float(loss):
                     lr = self._backtrack_parameters(parameters, lr)
                     if lr < 1e-20:
-                        print(f"\rConverged, step_size={lr:.2e}, "
+                        print(f"\r[{self.name} - layer{n_layer}] "
+                              f"Converged, step_size={lr:.2e}, "
                               f"norm_g={norm_gradients[-1]:.2e}")
                         break
                     continue
@@ -398,7 +426,8 @@ class Lista(torch.nn.Module):
 
         self.training_loss_ = training_loss
         self.norm_gradients = norm_gradients
-        print("\rFitting model: done".ljust(80))
+        print(f"\r[{self.name}-{self.n_layers}] Fitting model: done"
+              .ljust(80))
         return self
 
     def _loss_fn(self, x, lmbd, z_hat):

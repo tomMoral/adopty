@@ -82,11 +82,9 @@ def oracle_ista(D, x, lmbd, z_init=None, max_iter=100,
         support_y = y_hat != 0
         if np.sum(support_y * support) == np.sum(support_y):  # good step
             z_hat = y_hat
-        else:   # bad step
+        else:   # bad step, use the step_size 1/L
             step_size = 1 / L
             z_hat = one_ista(x, D, z_hat, lmbd, step_size)
-            cost_ista += [cost_lasso(z_hat[None, :], D, x[None, :], lmbd)]
-            steps.append(step_size)
 
         # Log the cost and the time
         times.append(time() - t_start_iter)

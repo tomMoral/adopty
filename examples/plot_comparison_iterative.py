@@ -39,7 +39,7 @@ for i, reg in enumerate(regs):
         for res in data_frame.query(f'reg == {reg}').results:
             cost, times = res[name]
             time += [times[-1]]
-            it += [len(cost)]
+            it += [len(times)]
 
         rect = ax_it.bar(x=x_position + j * width, align='edge',
                          height=np.mean(it), width=1, color=colors[j],
