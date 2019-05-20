@@ -17,9 +17,9 @@ data_frame = pd.read_pickle("figures/run_comparison_iterative.pkl")
 
 width = 1
 method_labels = [
-    ('ISTA', {}),
-    ('Oracle ISTA (proposed)', {'hatch': '//'}),
-    ('FISTA', {})
+    dict(label='ISTA', color='indigo'),
+    dict(label='Oracle ISTA (proposed)', color='indianred'),
+    dict(label='FISTA', color='goldenrod'),
 ]
 
 colors = color_palette(len(method_labels))
@@ -34,20 +34,19 @@ for i, reg in enumerate(regs):
 
     x_position = i * width * (len(method_labels) + 2)
     rect_it_list, rect_time_list = [], []
-    for j, (name, style) in enumerate(method_labels):
+    for j, style in enumerate(method_labels):
         time, it = [], []
+        name = style['label']
         for res in data_frame.query(f'reg == {reg}').results:
             cost, times = res[name]
             time += [times[-1]]
             it += [len(times)]
 
         rect = ax_it.bar(x=x_position + j * width, align='edge',
-                         height=np.mean(it), width=1, color=colors[j],
-                         label=name, **style)
+                         height=np.mean(it), width=1, **style)
         rect_it_list.append(rect)
         rect = ax_time.bar(x=x_position + j * width, align='edge',
-                           height=np.mean(time), width=1, color=colors[j],
-                           label=name, **style)
+                           height=np.mean(time), width=1, **style)
         rect_time_list.append(rect)
 
         # Add the actual numbers to show the dispersion
@@ -67,7 +66,7 @@ x_positions = np.arange(len(regs)) * width * (len(method_labels) + 2)
 labels = [r'$\lambda=%s$' % r for r in regs]
 for fig, ax in [(fig_it, ax_it), (fig_time, ax_time)]:
     ax.set_xticks(x_positions + offset)
-    ax.set_xticklabels(labels, ha='center')
+    ax.set_xticklabels(labels, ha='center', fontsize=22)
     ax.set_yscale("log")
     ax.grid(True)
     ax.legend()

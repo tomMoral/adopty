@@ -91,13 +91,11 @@ def run_one(method, max_iter, reg, n_samples, n_test, n_dims,
 
     loss = []
     training_losses = {}
-    params = []
     for n_layer in range(n_layers):
         network = Lista(D, n_layers=n_layer + 1, parametrization=method,
                         max_iter=max_iter, per_layer='oneshot',
-                        initial_parameters=params, name=label)
+                        name=label)
         network.fit(x, reg)
-        params = network.export_parameters()
         loss += [network.score(x_test, reg)]
         training_losses[n_layer] = network.training_loss_
 
@@ -120,7 +118,7 @@ if __name__ == '__main__':
     n_samples = 2000
     random_state = 42
 
-    max_iter = 500
+    max_iter = 2000
     n_layers = 20
 
     save_name = os.path.join('figures', base_name)
