@@ -408,7 +408,7 @@ class Lista(torch.nn.Module):
                 # Back-tracking line search
                 if len(training_loss) > 0 and training_loss[-1] < float(loss):
                     lr = self._backtrack_parameters(parameters, lr)
-                    if lr < 1e-20:
+                    if lr < 1e-20 and self.verbose:
                         print(f"\r[{self.name} - layer{n_layer}] "
                               f"Converged, step_size={lr:.2e}, "
                               f"norm_g={norm_gradients[-1]:.2e}")
@@ -426,8 +426,9 @@ class Lista(torch.nn.Module):
 
         self.training_loss_ = training_loss
         self.norm_gradients = norm_gradients
-        print(f"\r[{self.name}-{self.n_layers}] Fitting model: done"
-              .ljust(80))
+        if self.verbose:
+            print(f"\r[{self.name}-{self.n_layers}] Fitting model: done"
+                  .ljust(80))
         return self
 
     def _loss_fn(self, x, lmbd, z_hat):

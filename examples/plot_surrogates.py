@@ -3,8 +3,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from adopty.ista import ista
+from setup import colors, rc
 
-rc = {"pdf.fonttype": 42, 'text.usetex': True}
+
 plt.rcParams.update(rc)
 
 seed = np.random.randint(100000)
@@ -49,19 +50,22 @@ L = .4 * L
 S1 = [surrogate(x, D, z, zt, lbda, L) for z in z_]
 fac = .6
 S2 = [surrogate(x, D, z, zt, lbda, fac * L) for z in z_]
-plt.figure(figsize=(3, 2))
+
+
+f = plt.figure(figsize=(3, 2))
 plt.plot(L * alphas, F, label=r'$F_x$', color='k')
 plt.plot(L * alphas, S1, label=r'$Q_{x, L}(\cdot, z^{(t)})$',
-         color='cornflowerblue')
+         color=colors['ISTA'])
 plt.plot(L * alphas, S2, label=r'$Q_{x, L_S}(\cdot, z^{(t)})$',
-         color='indianred')
+         color=colors['OISTA'])
 vmin = min(F) * .99
 plt.ylim(vmin, max(F) * 1.1)
-plt.xlim(-.1, 4)
+plt.xlim(0, 4)
 
-plt.vlines(1., vmin, np.min(S1), color='cornflowerblue', linestyles='--')
-plt.vlines(1 / fac, vmin, np.min(S2), color='indianred', linestyles='--')
-plt.legend(loc='upper right')
+plt.vlines(1., vmin, np.min(S1), color=colors['ISTA'], linestyles='--')
+plt.vlines(1 / fac, vmin, np.min(S2), color=colors['OISTA'], linestyles='--')
+lgd = f.legend(ncol=3, loc='upper center', handletextpad=0.1, handlelength=0.8,
+               columnspacing=.7)
 x = plt.xlabel(r'Step size')
 y = plt.ylabel(r'Cost function')
 plt.xticks(np.array([0., 1., 1 / fac]),
@@ -69,6 +73,9 @@ plt.xticks(np.array([0., 1., 1 / fac]),
                    r'$\frac{1}{L}$',
                    r'$\frac{1}{L_S}$'])
 plt.gca().yaxis.set_major_locator(plt.NullLocator())
-plt.show()
+# plt.show()
+# plt.tight_layout()
+plt.subplots_adjust(top=0.75)
 
-plt.savefig('surrogate.pdf', bbox_extra_artists=[x, y], bbox_inches='tight')
+plt.savefig('examples/figures/surrogate.pdf',
+            bbox_extra_artists=[x, y, lgd], bbox_inches='tight')

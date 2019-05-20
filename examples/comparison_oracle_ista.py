@@ -5,7 +5,8 @@ from adopty.ista import ista
 from adopty.fista import fista
 from adopty.oracle_ista import oracle_ista
 
-rc = {"pdf.fonttype": 42, 'text.usetex': True}
+from setup import colors, rc
+
 plt.rcParams.update(rc)
 
 seed = np.random.randint(100000)
@@ -35,15 +36,20 @@ c_star = c_star[-1]
 f, axes = plt.subplots(2, 1, figsize=(4, 3), sharex=True,
                        gridspec_kw={'height_ratios': [3, 1]})
 ax = axes[0]
-ax.semilogy(cost_ista - c_star, label=r'ISTA', color='cornflowerblue')
-ax.semilogy(cost_fista - c_star, label=r'FISTA', color='orange')
+ax.semilogy(cost_ista - c_star, label=r'ISTA', color=colors['ISTA'],
+            linewidth=2)
+ax.semilogy(cost_fista - c_star, label=r'FISTA', color=colors['FISTA'],
+            linewidth=2)
 ax.semilogy(cost_oista - c_star,
-            label=r'Oracle ISTA',
-            color='indianred')
+            label=r'OISTA (proposed)',
+            color=colors['OISTA'], linewidth=2)
 ax.grid()
-lgd = ax.legend(ncol=3, bbox_to_anchor=(0.5, 1.2), loc='upper center')
+ax.set_ylim([1e-15, cost_ista[0] - c_star])
+ax.set_yticks([1e-6, 1e-12])
+lgd = f.legend(ncol=3, loc='upper center', handletextpad=0.1, handlelength=0.9,
+               columnspacing=.7)
 ax2 = axes[1]
-ax2.plot(steps / steps[0], color='indianred')
+ax2.plot(steps / steps[0], color=colors['OISTA'], linewidth=2)
 textx = len(steps) / 2 - 3
 text_width = 10
 ax2.hlines(1., 0, textx - 4, color='k', linestyle='--')
@@ -55,6 +61,7 @@ ax2.set_xlim(0, len(steps)-1)
 x = ax2.set_xlabel(r'Number of iterations')
 y = ax.set_ylabel(r'$F_x - F_x^*$')
 ax2.grid()
-plt.savefig('comparison_oista_ista.pdf', bbox_extra_artists=[lgd, x, y],
-            bbox_inches='tight')
-plt.show()
+plt.subplots_adjust(top=0.85)
+plt.savefig('examples/figures/comparison_oista_ista.pdf',
+            bbox_extra_artists=[lgd, x, y], bbox_inches='tight')
+# plt.show()
