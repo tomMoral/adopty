@@ -425,7 +425,7 @@ class Lista(torch.nn.Module):
                 norm_gradients.append(norm_g)
 
         self.training_loss_ = training_loss
-        self.norm_gradients = norm_gradients
+        self.norm_gradients_ = norm_gradients
         if self.verbose:
             print(f"\r[{self.name}-{self.n_layers}] Fitting model: done"
                   .ljust(80))
