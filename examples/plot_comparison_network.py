@@ -31,11 +31,13 @@ method_styles = {
 }
 
 
-eps = 1e-8
+eps = 1e-12
 loss_ista = np.array(data_frame.loss_ista[0])
 
-fig = plt.figure(figsize=(6, 4))
+fig = plt.figure(figsize=(6, 5))
 ax = fig.gca()
+
+reg = data_frame.reg[0]
 c_star = data_frame.c_star[0] - eps
 style = base_style.copy()
 style.update(method_styles['ISTA'])
@@ -60,9 +62,9 @@ ax.grid(True)
 fig.legend(loc='upper right', ncol=ncol, columnspacing=0.8)
 
 fig.tight_layout()
-fig.subplots_adjust(top=.75)
+fig.subplots_adjust(top=.80)
 
 
-fig.savefig("figures/comparison_network")
+fig.savefig(f"figures/comparison_network_reg={str(reg).replace('.', ',')}")
 
 plt.show()

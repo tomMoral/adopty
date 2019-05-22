@@ -39,7 +39,7 @@ verbose = 1
 # base string for the save names.
 base_name = 'run_comparison_images'
 # n_jobs for the parallel running of single core methods
-n_jobs = 4
+n_jobs = 6
 
 
 #########################################
@@ -82,7 +82,7 @@ def run_one(parametrization, n_layer, max_iter, reg, n_samples, n_test,
     print(colorify(msg, BLUE))
 
     x, D, _ = make_image_coding(n_samples=n_samples + n_test, n_atoms=n_atoms,
-                                normalize=False, random_state=random_state)
+                                normalize=True, random_state=random_state)
 
     x_test = x[n_samples:]
     x = x[:n_samples]
@@ -117,7 +117,7 @@ if __name__ == '__main__':
 
     save_name = os.path.join('figures', base_name)
 
-    args = (max_iter, reg, n_samples, n_atoms, n_atoms,
+    args = (max_iter, reg, n_samples, n_test, n_atoms,
             random_state)
 
     iterator = product(parametrizations, range(1, n_layers + 1))
@@ -132,7 +132,7 @@ if __name__ == '__main__':
             for parametrization, n_layer in iterator)
 
     x, D, _ = make_image_coding(n_samples=n_samples + n_test, n_atoms=n_atoms,
-                                normalize=False, random_state=random_state)
+                                normalize=True, random_state=random_state)
 
     x_test = x[n_samples:]
     x = x[:n_samples]
@@ -146,15 +146,15 @@ if __name__ == '__main__':
     c_star = cost_test[-1]
     loss_ista = cost_test[:n_layers + 1]
 
-    results = [(*r, c0, c_star) for r in results]
     for n_layer in range(n_layers):
         results.append(
             ('ista', n_layer + 1, *args, loss_ista[n_layer + 1], None)
         )
+    results = [(*r, c0, c_star) for r in results]
 
     results_df = pd.DataFrame(
-        results, columns='parametrization max_iter reg n_samples n_test '
-        'n_atoms n_layer random_state loss training_loss c0 c_star'
+        results, columns='parametrization n_layer max_iter reg n_samples '
+        'n_test n_atoms random_state loss training_loss c0 c_star'
         .split(' '))
     results_df.to_pickle(save_name + '.pkl')
 
