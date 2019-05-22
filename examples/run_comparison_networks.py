@@ -23,8 +23,8 @@ from adopty.datasets import make_coding, make_image_coding
 from adopty.stopping_criterions import stop_on_no_decrease
 
 # number of jobs and GPUs accessible for the parallel running of the methods
-N_JOBS = 6
-N_GPU = 0
+N_JOBS = 4
+N_GPU = 2
 
 
 # Constants for logging in console.
@@ -71,7 +71,7 @@ def colorify(message, color=BLUE):
 ################################################
 
 @mem.cache
-def run_one(parametrization, n_layer, data, reg, max_iter, n_samples, n_test,
+def run_one(parametrization, data, reg, n_layer, max_iter, n_samples, n_test,
             n_atoms, n_dim, random_state):
 
     if N_GPU == 0:
@@ -96,7 +96,7 @@ def run_one(parametrization, n_layer, data, reg, max_iter, n_samples, n_test,
     x_test = x[n_samples:]
     x = x[:n_samples]
 
-    network = Lista(D, n_layers=n_layer + 1,
+    network = Lista(D, n_layers=n_layer,
                     parametrization=parametrization,
                     max_iter=max_iter, per_layer='oneshot',
                     device=device, name=parametrization)
@@ -109,7 +109,7 @@ def run_one(parametrization, n_layer, data, reg, max_iter, n_samples, n_test,
            f"at T={current_time:.0f} sec")
     print(colorify(msg, GREEN))
 
-    return (parametrization, n_layer, data, reg, max_iter, n_samples, n_test,
+    return (parametrization, data, reg, n_layer, max_iter, n_samples, n_test,
             n_atoms, n_dim, random_state, loss, training_loss)
 
 
@@ -134,17 +134,17 @@ if __name__ == '__main__':
     args = (max_iter, n_samples, n_test, n_atoms, n_dim,
             random_state)
 
-    iterator = product(parametrizations, range(1, n_layers + 1),
-                       datasets, regs)
+    iterator = product(parametrizations, datasets, regs,
+                       range(n_layers))
 
     if N_JOBS == 1:
-        results = [run_one(parametrization, n_layer, data, reg, *args)
-                   for parametrization, n_layer, data, reg in iterator]
+        results = [run_one(parametrization, data, reg, n_layer + 1, *args)
+                   for parametrization, data, reg, n_layer in iterator]
     else:
         delayed_run_one = delayed(run_one)
         results = Parallel(n_jobs=N_JOBS)(
-            delayed_run_one(parametrization, n_layer, data, reg, *args)
-            for parametrization, n_layer, data, reg in iterator)
+            delayed_run_one(parametrization, data, reg, n_layer + 1, *args)
+            for parametrization, data, reg, n_layer in iterator)
 
     for data in datasets:
         if data == "images":
@@ -171,12 +171,12 @@ if __name__ == '__main__':
                        for r in results]
             for n_layer in range(n_layers):
                 results.append(
-                    ('ista', n_layer + 1, data, reg, *args,
+                    ('ista', data, reg, n_layer + 1, *args,
                      cost_test[n_layer + 1], None, c0, c_star)
                 )
 
     results_df = pd.DataFrame(
-        results, columns='parametrization n_layer data reg max_iter n_samples '
+        results, columns='parametrization data reg n_layer max_iter n_samples '
         'n_test n_atoms n_dim random_state loss training_loss c0 c_star'
         .split(' '))
     results_df.to_pickle(save_name + '.pkl')
