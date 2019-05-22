@@ -44,7 +44,7 @@ def get_alista_weights(D, max_iter=10000, step_size=1e-2, tol=1e-12):
         W = proj(W, D)
 
         pobj.append(obj_func(W, D))
-        assert pobj[-1] <= pobj[-2]
+        assert pobj[-1] <= pobj[-2] + 1e-8, (pobj[-2] - pobj[-1])
         if 1 - pobj[-1] / pobj[-2] < tol:
             break
 
