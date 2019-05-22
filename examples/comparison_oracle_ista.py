@@ -54,7 +54,7 @@ textx = len(steps) / 2 - 3
 text_width = 10
 ax2.hlines(1., 0, textx - 4, color='k', linestyle='--')
 ax2.hlines(1., textx + text_width, len(steps), color='k', linestyle='--')
-ax2.text(textx, .4, r'$\frac{1}{L}$', fontsize=12)
+ax2.text(textx, .7, r'$\frac{1}{L}$', fontsize=15)
 ax2.set_ylim(0.1, max(steps/steps[0]) + .2)
 ax2.set_ylabel(r'Oracle step')
 ax2.set_xlim(0, len(steps)-1)

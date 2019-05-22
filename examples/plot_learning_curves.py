@@ -66,32 +66,25 @@ def get_curve(n_dim, n_atoms, n, n_samples, n_layers, reg, rng, max_iter,
     return np.array(loss_lista), np.array(loss_slista), c_star
 
 
-loss_listas = np.zeros(len(n_samples))
-loss_slistas = np.zeros(len(n_samples))
-for rng in range(n_avg):
-    print("skuuuuuuuuuuuuuuuuu {}".format(rng))
-    loss_lista, loss_slista, c_star = get_curve(n_dim, n_atoms, n, n_samples,
-                                                n_layers, reg, rng, max_iter,
-                                                training)
-    loss_listas += loss_lista - c_star
-    loss_slistas += loss_slista - c_star
+loss_lista = np.load('loss_lista.npy')
+loss_slista = np.load('loss_slista.npy')
 # loss_ista = Lista(D, n_layers).score(x_test, reg)
-loss_ista = loss_listas / n_avg
-loss_slista = loss_slistas / n_avg
+loss_lista = np.median(loss_lista, axis=1)
+loss_slista = np.median(loss_slista, axis=1)
 f = plt.figure(figsize=(3, 2))
 idx = np.where(n_samples > 30)[0]
 n_samples = n_samples[idx]
 loss_lista = loss_lista[idx]
 loss_slista = loss_slista[idx]
 
-plt.plot(n_samples, loss_slista - c_star, label='SLISTA (proposed)',
+plt.plot(n_samples, loss_slista, label='SLISTA (proposed)',
          color=colors['SLISTA'], linewidth=3)
-plt.plot(n_samples, loss_lista - c_star, label='LISTA', color=colors['LISTA'],
+plt.plot(n_samples, loss_lista, label='LISTA', color=colors['LISTA'],
          linewidth=3)
 # plt.hlines(loss_ista, n_samples[0], n_samples[-1], color=colors['ISTA'],
 #            label='ISTA', linewidth=3)
 x_ = plt.xlabel('Training samples')
-y_ = plt.ylabel('Test loss')
+y_ = plt.ylabel('Median test loss')
 plt.yscale('log')
 plt.xscale('log')
 plt.grid()
