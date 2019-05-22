@@ -189,7 +189,7 @@ class Lista(torch.nn.Module):
         output. Usefull to save the parameters.
         """
         return [
-            {k: p.detach().numpy() for k, p in layer_parameters.items()}
+            {k: p.detach().cpu().numpy() for k, p in layer_parameters.items()}
             for layer_parameters in self.layers_parameters
         ]
 
@@ -197,7 +197,7 @@ class Lista(torch.nn.Module):
         """Return a list with the parameter name of each layer in the network.
         """
         return [
-            layer_parameters[name].detach().numpy()
+            layer_parameters[name].detach().cpu().numpy()
             if name in layer_parameters else None
             for layer_parameters in self.layers_parameters
         ]
@@ -358,7 +358,7 @@ class Lista(torch.nn.Module):
             z_hat = self.transform(x, lmbd)
             for i in range(100):
                 z_hat = self.transform(x, lmbd, z0=z_hat)
-            c_star = cost_lasso(z_hat.numpy(), self.D, x, lmbd)
+            c_star = cost_lasso(z_hat.cpu().numpy(), self.D, x, lmbd)
 
         parameters = [p for layer_parameters in self.layers_parameters
                       for p in layer_parameters.values()]
