@@ -1,14 +1,18 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-from matplotlib import rc
-
-
-rc = {"pdf.fonttype": 42, 'text.usetex': True}
+############################################
+#  Setup matplotlib
+#
+from setup import rc
 plt.rcParams.update(rc)
-rng = np.random.RandomState(0)
 
 
+#######################################################
+#  Auxillary functions to approximate the empirical
+#  and theoretical law for the distribution of
+#  L / L_S
+#
 def lipschitz(D):
     return np.linalg.eigvalsh(D.T.dot(D))[-1]
 
@@ -19,6 +23,12 @@ def theoretical_law(zeta, gamma):
 
 def approximate_law(zeta):
     return zeta
+
+
+##########################################
+#  Sample the distribution
+#
+rng = np.random.RandomState(0)
 
 
 n = 200
@@ -40,15 +50,20 @@ for zeta in zeta_list:
     Ls = lipschitz(Ds)
     L_list.append(Ls / L)
 
+##########################################
+#  Plot the empirical and theoretical
+#  distributions
+#
 plt.figure(figsize=(3.5, 2.5))
 plt.plot(zeta_list, L_list, label=r'Empirical law', linewidth=3)
 plt.plot(zeta_list, theoretical_law(zeta_list, gamma), linewidth=2,
-         label=r'$\big(\frac{1 + \sqrt{\zeta\gamma}}{1 + \sqrt{\gamma}} \big)^2$')
-plt.plot(zeta_list, zeta_list, linewidth=3, linestyle= '--', color='k',
+         label=r'$\big(\frac{1 + \sqrt{\zeta\gamma}}'
+         r'{1 + \sqrt{\gamma}}\big)^2$')
+plt.plot(zeta_list, zeta_list, linewidth=3, linestyle='--', color='k',
          label=r'$\zeta$')
 x_ = plt.xlabel(r'$\zeta$')
 y_ = plt.ylabel(r'$\frac{L_S}{L}$')
 plt.legend()
-plt.savefig('lip_distrib.pdf', bbox_extra_artists=[x_, y_],
+plt.savefig('figures/lip_distrib.pdf', bbox_extra_artists=[x_, y_],
             bbox_inches='tight')
 plt.show()

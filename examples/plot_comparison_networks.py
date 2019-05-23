@@ -1,36 +1,53 @@
+"""
+Benchmark different network solvers of the same LASSO problem.
 
+- Use example/run_comparison_networks.py to run the benchmark.
+  The results are saved in figures/.
+- Use example/plot_comparison_networks.py to plot the results.
+  The figures are saved in figures/.
+"""
+
+import argparse
 import numpy as np
 import pandas as pd
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 
 
-import argparse
+##############################
+# Configure matplotlib
+##############################
+from setup import colors, rc
+plt.rcParams.update(rc)
+
+
+# Can change input files using `--file FILE` option of the script.
 parser = argparse.ArgumentParser()
 parser.add_argument('--file', type=str,
                     default="figures/run_comparison_networks.pkl")
 args = parser.parse_args()
 
-
-# Configure matplotlib
-mpl.rc('font', size=18)
-mpl.rc('mathtext', fontset='cm')
-
-
-# Load data
+#########################################
+# Load data from the pickle file
+#########################################
 df = pd.read_pickle(args.file)
 
+#########################################
+# Define the styles for the plot
+#########################################
 base_style = {
     'linewidth': 3
 }
 method_styles = {
-    'ista': dict(label='ISTA', color='indigo'),
-    'coupled': dict(label="LISTA", color='mediumseagreen'),
-    'alista': dict(label="ALISTA", color='cornflowerblue'),
-    'step': dict(label="SLISTA (proposed)", color='indianred'),
+    'ista': dict(label='ISTA', color=colors['ISTA']),
+    'coupled': dict(label="LISTA", color=colors['LISTA']),
+    'alista': dict(label="ALISTA", color=colors['ALISTA']),
+    'step': dict(label="SLISTA (proposed)", color=colors['SLISTA']),
 }
 
 
+#########################################
+# Plot the results
+#########################################
 eps = 1e-8
 
 regs = df.reg.unique()

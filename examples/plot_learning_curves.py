@@ -1,23 +1,26 @@
 import numpy as np
-
-from copy import deepcopy
 from joblib import Memory
+from itertools import product
 import matplotlib.pyplot as plt
 
-from itertools import product
 
 from adopty.lista import Lista
 from adopty.datasets import make_coding
 from joblib import Parallel, delayed
 
+
+############################################
+# Configure matplotlib and joblib cache
+############################################
 from setup import colors, rc
+plt.rcParams.update(rc)
 
 mem = Memory(location='.', verbose=0)
 
 
-plt.rcParams.update(rc)
-
-
+###########################################
+# Parameters of the simulation
+###########################################
 n_dim = 5
 n_atoms = 10
 power = 4
@@ -32,11 +35,9 @@ n_jobs = 3
 n_avg = 10
 
 
-x, D, z = make_coding(n_samples=n, n_atoms=n_atoms,
-                      n_dim=n_dim, random_state=rng)
-x_test = x[n_samples[-1]:]
-
-
+############################################
+# Benchmark computation function
+############################################
 @mem.cache
 def get_curve(n_dim, n_atoms, n, n_samples, n_layers, reg, rng, max_iter,
               training):
@@ -66,6 +67,15 @@ def get_curve(n_dim, n_atoms, n, n_samples, n_layers, reg, rng, max_iter,
     return np.array(loss_lista), np.array(loss_slista), c_star
 
 
+############################################
+# Run the benchmark
+############################################
+get_curve(n_dim, n_atoms, n, n_samples, n_layers, reg, rng, max_iter, training)
+
+
+############################################
+# Plot the results
+############################################
 loss_lista = np.load('loss_lista.npy')
 loss_slista = np.load('loss_slista.npy')
 # loss_ista = Lista(D, n_layers).score(x_test, reg)
@@ -94,4 +104,4 @@ lgd = f.legend(ncol=1, loc='upper right', handletextpad=0.1, handlelength=0.8,
 plt.savefig('examples/figures/learning_curve.pdf',
             bbox_extra_artists=[lgd, x_, y_],
             bbox_inches='tight')
-# plt.show()
+plt.show()

@@ -1,10 +1,10 @@
 """
 Benchmark different network solvers of the same LASSO problem.
 
-- Use run_comparison_networks.py to run the benchmark.
-  The results are saved in adopty/figures.
-- Use plot_comparison_networks.py to plot the results.
-  The figures are saved in adopty/figures.
+- Use example/run_comparison_networks.py to run the benchmark.
+  The results are saved in figures/.
+- Use example/plot_comparison_networks.py to plot the results.
+  The figures are saved in figures/.
 """
 
 from __future__ import print_function
@@ -142,7 +142,7 @@ if __name__ == '__main__':
                    for parametrization, data, reg, n_layer in iterator]
     else:
         delayed_run_one = delayed(run_one)
-        results = Parallel(n_jobs=N_JOBS)(
+        results = Parallel(n_jobs=N_JOBS, batch_size=1)(
             delayed_run_one(parametrization, data, reg, n_layer + 1, *args)
             for parametrization, data, reg, n_layer in iterator)
 

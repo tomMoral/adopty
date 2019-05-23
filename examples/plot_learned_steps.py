@@ -1,18 +1,24 @@
 import numpy as np
-
-from copy import deepcopy
-from joblib import Memory
 import matplotlib.pyplot as plt
+
 
 from adopty.lista import Lista
 from adopty.datasets import make_coding
+
+
+############################################
+# Configure matplotlib and joblib cache
+############################################
+from joblib import Memory
 from setup import colors, rc
+plt.rcParams.update(rc)
 
 mem = Memory(location='.', verbose=0)
 
 
-plt.rcParams.update(rc)
-
+###########################################
+# Parameters of the simulation
+###########################################
 n_dim = 10
 n_atoms = 20
 n_samples = 1000
@@ -23,6 +29,9 @@ rng = 1
 max_iter = 100
 
 
+############################################
+# Benchmark computation function
+############################################
 @mem.cache
 def get_steps(n_dim, n_atoms, n_samples, n_test, n_layers, reg, rng, max_iter):
     lista_kwargs = dict(
@@ -33,7 +42,6 @@ def get_steps(n_dim, n_atoms, n_samples, n_test, n_layers, reg, rng, max_iter):
     x_test = x[n_samples:]
     x = x[:n_samples]
 
-    c_star = Lista(D, 1000).score(x_test, reg)
     L = np.linalg.norm(D, ord=2) ** 2  # Lipschitz constant
     network = Lista(D, **lista_kwargs,
                     parametrization='step', per_layer='oneshot')
@@ -56,8 +64,16 @@ def get_steps(n_dim, n_atoms, n_samples, n_test, n_layers, reg, rng, max_iter):
     return steps, L, L_s, S_pca
 
 
+############################################
+# Run the benchmark
+############################################
 steps, L, L_S, S_pca = get_steps(n_dim, n_atoms, n_samples, n_test, n_layers,
                                  reg, rng, max_iter)
+
+
+############################################
+# Plot the results
+############################################
 ls_steps = 1 / L_S
 n_quantiles = 11
 quantiles = np.linspace(0, 0.95, n_quantiles)
@@ -91,10 +107,10 @@ plt.yticks([1 / L, 2 / L, 3 / L], [r'$1/L$', r'$2/L$', r'$3/L$'])
 # ax[1].set_ylim([0.18, 0.67])
 # # plt.hlines(2 / L_S, 0, n_layers, color='b', linestyle='--',
 # #            label=r'$\frac{2}{L_S}$')
-lgd_ = f.legend(ncol=1, loc='upper center', handletextpad=0.1,
-                handlelength=1, columnspacing=.8, borderpad=.15)
-plt.subplots_adjust(top=0.68)
-plt.savefig('examples/figures/learned_steps.pdf',
+lgd_ = f.legend(ncol=3, loc='upper center', handletextpad=0.1,
+                handlelength=1, columnspacing=.8)
+plt.subplots_adjust(top=0.75)
+plt.savefig('figures/learned_steps.pdf',
             bbox_extra_artists=[lgd_, x_, y_],
             bbox_inches='tight')
-# plt.show()
+plt.show()
