@@ -14,10 +14,6 @@ PARAMETRIZATIONS = {
         'Wx': [],
         'Wz': [],
     },
-    "hessian": {
-        'threshold': [],
-        'W_hessian': ["sym"],
-    },
     "coupled": {
         'threshold': [],
         'W_coupled': [],
