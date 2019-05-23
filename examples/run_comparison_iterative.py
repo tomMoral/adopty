@@ -26,9 +26,9 @@ from adopty.datasets import make_coding
 START = time.time()
 BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE = range(30, 38)
 
-##############################
+###########################################
 # Parameters of the simulation
-##############################
+###########################################
 
 verbose = 1
 
@@ -40,13 +40,14 @@ n_jobs = 4
 n_states = 10
 # loop over parameters
 reg_list = [.1, .4, .8]
+# Input dimension
+n_dims = 100
+n_atoms = 200
 
 
 #########################################
 # List of functions used in the benchmark
 #########################################
-
-
 methods = [
     [ista, 'ISTA'],
     [fista, 'FISTA'],
@@ -54,11 +55,9 @@ methods = [
 ]
 
 
-###################################
-# Calling function of the benchmark
-###################################
-
-
+############################################
+# Benchmark computation function
+############################################
 def run_one(reg, n_dims, n_atoms, random_state):
 
     current_time = time.time() - START
@@ -102,10 +101,10 @@ def colorify(message, color=BLUE):
     return ("\033[1;%dm" % color) + message + "\033[0m"
 
 
+############################################
+# Run the benchmark
+############################################
 if __name__ == '__main__':
-
-    n_dims = 100
-    n_atoms = 200
 
     save_name = os.path.join('figures', base_name)
 

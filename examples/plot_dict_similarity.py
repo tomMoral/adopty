@@ -1,23 +1,24 @@
 import numpy as np
-
-from copy import deepcopy
-from joblib import Memory
 import matplotlib.pyplot as plt
 
-from itertools import product
 
 from adopty.lista import Lista
 from adopty.datasets import make_coding
-from joblib import Parallel, delayed
 
+
+############################################
+# Configure matplotlib and joblib cache
+############################################
+from joblib import Memory
 from setup import colors, rc
+plt.rcParams.update(rc)
 
 mem = Memory(location='.', verbose=0)
 
 
-plt.rcParams.update(rc)
-
-
+###########################################
+# Parameters of the simulation
+###########################################
 n_dim = 10
 n_atoms = 20
 n_samples = 1000
@@ -28,6 +29,9 @@ max_iter = 10000
 training = 'recursive'
 
 
+############################################
+# Benchmark computation function
+############################################
 @mem.cache
 def get_params(n_samples, n_atoms, n_dim, rng, max_iter,
                training, n_layers):
@@ -43,10 +47,16 @@ def get_params(n_samples, n_atoms, n_dim, rng, max_iter,
     return D, W_list, thresholds
 
 
+############################################
+# Run the benchmark
+############################################
 D, W_list, thresholds = get_params(n_samples, n_atoms, n_dim,
                                    rng, max_iter, training, n_layers)
 
 
+############################################
+# Plotting utilities
+############################################
 def fro_diff(W, thresholds, D):
     return np.linalg.norm(W - thresholds[:, None] * D)
 
@@ -57,6 +67,9 @@ def cosine_similarity(D, W):
     return np.abs(np.dot(w, d)) / np.sqrt(d.dot(d) * w.dot(w))
 
 
+############################################
+# Plot the results
+############################################
 cs_list = np.array([cosine_similarity(D, W.T) for W in W_list])
 f_list = np.array([fro_diff(W.T, t, D) for W, t in zip(W_list, thresholds)])
 
@@ -72,6 +85,6 @@ plt.xticks([1, 10, 20, 30, 40])
 plt.ylabel(r'$\|\alpha^{(t)}W^{(t)} - \beta^{(t)}D \|_F$')
 plt.xlim([1, n_layers])
 plt.grid()
-# plt.show()
-plt.savefig('examples/figures/fro_similarity.pdf',
+plt.savefig('figures/fro_similarity.pdf',
             bbox_extra_artists=[lgd, ], bbox_inches='tight')
+plt.show()

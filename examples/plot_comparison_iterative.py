@@ -1,29 +1,35 @@
 
 import numpy as np
 import pandas as pd
-import matplotlib as mpl
 import matplotlib.pyplot as plt
 
-from adopty.utils.viz import color_palette
 
-
+##############################################
 # Configure matplotlib
-mpl.rc('font', size=18)
-mpl.rc('mathtext', fontset='cm')
+##############################################
+from setup import colors, rc
+plt.rcParams.update(rc)
 
 
-# Load data
+###########################################
+# Load data from the pickle file
+###########################################
 data_frame = pd.read_pickle("figures/run_comparison_iterative.pkl")
 
+
+###########################################
+# Define the styles for the plot
+###########################################
 width = 1
 method_labels = [
-    dict(label='ISTA', color='indigo'),
-    dict(label='Oracle ISTA (proposed)', color='indianred'),
-    dict(label='FISTA', color='goldenrod'),
+    dict(label='ISTA', color=colors['ISTA']),
+    dict(label='Oracle ISTA (proposed)', color=colors['OISTA']),
+    dict(label='FISTA', color=colors['FISTA']),
 ]
 
-colors = color_palette(len(method_labels))
-
+##############################################
+# Plot the results
+##############################################
 regs = data_frame['reg'].unique()
 
 fig_it = plt.figure(figsize=(11, 4))
