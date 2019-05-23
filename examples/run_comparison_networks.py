@@ -6,8 +6,6 @@ Benchmark different network solvers of the same LASSO problem.
 - Use example/plot_comparison_networks.py to plot the results.
   The figures are saved in figures/.
 """
-
-from __future__ import print_function
 import os
 import time
 from itertools import product

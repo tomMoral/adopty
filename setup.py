@@ -8,10 +8,10 @@ descr = """Adaptive Optimization for the LASSO"""
 
 DISTNAME = 'adopty'
 DESCRIPTION = descr
-MAINTAINER = 'Thomas Moreau'
-MAINTAINER_EMAIL = 'thomas.moreau.2010@gmail.com'
+MAINTAINER = 'XXX XXX'
+MAINTAINER_EMAIL = 'xxx@xxx.com'
 LICENSE = 'BSD (3-clause)'
-DOWNLOAD_URL = 'https://github.com/tommoral/adopty.git'
+DOWNLOAD_URL = 'https://github.com/XXX/XXX.git'
 
 
 # Function to parse __version__ in `adopty`

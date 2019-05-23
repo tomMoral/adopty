@@ -60,8 +60,8 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'adopty'
-copyright = u'2018, Thomas Moreau'
-author = u'Thomas Moreau'
+copyright = u'2018, XXXX XXX'
+author = u'XXX XXX'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -246,7 +246,7 @@ latex_elements = {
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
     (master_doc, 'adopty.tex', u'adopty Documentation',
-     u'Thomas Moreau', 'manual'),
+     u'XXX XXX', 'manual'),
 ]
 
 # The name of an image file (relative to this directory) to place at the top of
