@@ -20,6 +20,12 @@ for f in examples/*.py; do
 	fi
 done
 
+# If adopty.zip already exists, remove it first to avoid leaking files.
+if [[ -f adopty.zip ]]; then
+    rm adopty.zip
+fi
+
+
 # Get all files in the repository and avoid includingn git files
 echo -e '\n======  \033[1;33mCreate the archive\033[0m =======\n'
 list_files=$(git ls-tree -r --name-only anonymous | grep -v ".git\\|mk_zip" )

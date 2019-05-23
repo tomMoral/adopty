@@ -31,6 +31,7 @@ args = parser.parse_args()
 #########################################
 df = pd.read_pickle(args.file)
 
+
 #########################################
 # Define the styles for the plot
 #########################################
@@ -43,6 +44,12 @@ method_styles = {
     'alista': dict(label="ALISTA", color=colors['ALISTA']),
     'step': dict(label="SLISTA (proposed)", color=colors['SLISTA']),
 }
+id_ax = {
+    ('simulations', .1): (0, "Simulated data $\lambda=0.1$"),
+    ('simulations', .8): (1, "Simulated data $\lambda=0.8$"),
+    ('images', .1): (2, "Digits data $\lambda=0.1$"),
+    ('images', .8): (3, "Digits data $\lambda=0.8$")
+}
 
 
 #########################################
@@ -53,43 +60,51 @@ eps = 1e-8
 regs = df.reg.unique()
 datasets = df.data.unique()
 
-for reg in regs:
-    for data in datasets:
+fig, axes = plt.subplots(ncols=4, figsize=(12, 3))
+for data in datasets:
+    for reg in regs:
+        idx, title = id_ax[(data, reg)]
+        ax = axes[idx]
         this_expe = df[df.data == data]
         this_expe = this_expe[this_expe.reg == reg]
-        fig = plt.figure(figsize=(6, 5))
-        ax = fig.gca()
-        c_star = this_expe.c_star.iloc[0] - eps
+        ista_expe = this_expe[this_expe.parametrization == 'ista']
+        c_star = ista_expe.c_star.iloc[0] - eps
+        c0 = ista_expe.c0.iloc[0] - c_star
         n_layers = this_expe.n_layer.max()
 
+        lines = []
         for method, style in method_styles.items():
             this_network = this_expe[this_expe.parametrization == method]
-            loss = [this_network.c0.iloc[0]]
+            loss = [c0]
             layers = [0]
             for i in this_network.T:
                 layers.append(this_network.n_layer[i])
-                loss.append(this_network.loss[i] - this_network.c_star[i])
+                loss.append(this_network.loss[i] - c_star)
             loss = np.array(loss)
 
             style_ = base_style.copy()
             style_.update(style)
-            plt.plot(layers, loss, **style_)
+            lines.extend(ax.plot(layers, loss, **style_))
 
         ax.set_xticks([0, 10, 20, 30])
-        ax.set_ylabel('$F_x - F_x^*$')
-        ax.set_xlabel('Number of Layers/Iterations')
-        # ax.set_ylim(1e-8, 1e-1)
+        labels = ax.get_yticklabels()
+        ax.set_yticklabels(labels, fontsize=12)
+        if idx == 0:
+            ax.set_ylabel('$F_x - F_x^*$')
+        ax.set_xlabel('Number of Layers')
+        ax.set_yscale("log")
+        ax.set_title(title)
+        ylim = ax.get_ylim()
+        ax.set_ylim(max(ylim[0], 5e-8), ylim[1])
         ax.set_xlim(0, n_layers)
 
-        ncol = 2
-        ax.set_yscale("log")
         ax.grid(True)
-        fig.legend(loc='upper right', ncol=ncol, columnspacing=0.8)
 
-        fig.tight_layout()
-        fig.subplots_adjust(top=.8)
-
-        suffix = f"_data_{data}_reg_{str(reg).replace('.', ',')}"
-        fig.savefig(f"figures/comparison_images{suffix}")
+ncol = 4
+fig.legend(lines, [l.get_label() for l in lines],
+           loc='upper center', ncol=ncol, columnspacing=0.8)
+fig.tight_layout()
+fig.subplots_adjust(top=.75, wspace=.2)
+fig.savefig(f"figures/comparison_networks")
 
 plt.show()
