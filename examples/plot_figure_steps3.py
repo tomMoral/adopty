@@ -65,10 +65,10 @@ quantiles = np.linspace(0, 0.95, n_quantiles)
 quants = np.array([np.quantile(ls_steps, q, axis=1) for q in quantiles])
 f, ax = plt.subplots(1, 1, figsize=(3, 2))
 xlim = np.arange(1, n_layers + 1)
-ax.plot(xlim, steps, color=colors['SLISTA'], label='Learned steps',
+ax.plot(xlim, steps, color=colors['SLISTA'], label='Learned steps of the network',
         linewidth=3)
 ax.plot(xlim, quants[n_quantiles // 2], color='darkgoldenrod',
-        label=r'Median $1/L_S$', linewidth=3)
+        label=r'Median $1/L_S$ on training samples', linewidth=3)
 for i in range(n_quantiles // 2):
     ax.fill_between(xlim, quants[i], quants[n_quantiles - i - 1],
                     color='sandybrown', alpha=1.5 * (i + 1)/n_quantiles)
@@ -91,9 +91,9 @@ plt.yticks([1 / L, 2 / L, 3 / L], [r'$1/L$', r'$2/L$', r'$3/L$'])
 # ax[1].set_ylim([0.18, 0.67])
 # # plt.hlines(2 / L_S, 0, n_layers, color='b', linestyle='--',
 # #            label=r'$\frac{2}{L_S}$')
-lgd_ = f.legend(ncol=3, loc='upper center', handletextpad=0.1,
-                handlelength=1, columnspacing=.8)
-plt.subplots_adjust(top=0.75)
+lgd_ = f.legend(ncol=1, loc='upper center', handletextpad=0.1,
+                handlelength=1, columnspacing=.8, borderpad=.15)
+plt.subplots_adjust(top=0.68)
 plt.savefig('examples/figures/learned_steps.pdf',
             bbox_extra_artists=[lgd_, x_, y_],
             bbox_inches='tight')
