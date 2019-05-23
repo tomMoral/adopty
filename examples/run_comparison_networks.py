@@ -12,6 +12,7 @@ import os
 import time
 from itertools import product
 
+import torch
 import pandas as pd
 from joblib import Memory
 from joblib import Parallel, delayed
@@ -24,7 +25,7 @@ from adopty.stopping_criterions import stop_on_no_decrease
 
 # number of jobs and GPUs accessible for the parallel running of the methods
 N_JOBS = 4
-N_GPU = 2
+N_GPU = 0
 
 
 # Constants for logging in console.
@@ -74,10 +75,17 @@ def colorify(message, color=BLUE):
 def run_one(parametrization, data, reg, n_layer, max_iter, n_samples, n_test,
             n_atoms, n_dim, random_state):
 
+    # try to avoid having dangling memory
+    torch.cuda.empty_cache()
+
+    # Stread the computations on the different GPU. This strategy
+    # might fail and some GPU might be overloaded if some workers are
+    # re-spawned.
     if N_GPU == 0:
         device = None
     else:
-        device = f"cuda:{n_layer % N_GPU}"
+        pid = os.getpid()
+        device = f"cuda:{pid % N_GPU}"
 
     tag = f"[{parametrization} - {n_layer}]"
     current_time = time.time() - START
