@@ -82,6 +82,7 @@ y_ = ax.set_ylabel('Step')
 ax.set_xticks([1, 10, 20])
 ax.set_xlim([1, n_layers])
 ax.set_ylim([0.15, 0.7])
+plt.yticks([1 / L, 2 / L, 3 / L], [r'$1/L$', r'$2/L$', r'$3/L$'])
 # ax[1].hist(1 / np.array(S_pca), orientation='horizontal', bins=30,
 #            density='normed', color='sandybrown', alpha=0.8,
 #            histtype='bar', label=r'$\frac{1}{L_S}$')
