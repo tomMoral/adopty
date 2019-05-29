@@ -4,9 +4,9 @@
 
 ## Compat
 
-This package have been developed and tested with `python3.6`. It is therefore not guaranteed to work with earlier version of python.
+This package has been developed and tested with `python3.6`. It is therefore not guaranteed to work with earlier versions of python.
 
-## Install the repo on your machine
+## Install the repository on your machine
 
 
 This package can easily be installed using `pip`, with the following command:
@@ -39,14 +39,14 @@ python examples/plot_learned_steps.py
 ```
 
 
-Figure 5 - Show that when learning a LISTA network with 40 layers, the last layers alleviate to SLISTA layers, where only the step size differs from ISTA. This verifies numerically theorem 4.4.
+Figure 5 - Show that when learning a LISTA network with 40 layers, the last layers look like SLISTA layers, where only the step size differs from ISTA. This verifies numerically theorem 4.4.
 
 ```bash
 python examples/plot_dict_similarity.py
 ```
 
 
-Figure 6 - comparison of ISTA, LISTA, ALISTA and SLISTA on large scale problems. Note that this experiment can take up to 24h to be generated. You can tweak the parameter N_JOB and N_GPU in `examples/run_comparison_networks.py` to fasten the computations by parallelization and using GPU. Note that if both are set, you will have N_JOB / N_GPU jobs running on each GPU, which should be chosen reasonably.
+Figure 6 - comparison of ISTA, LISTA, ALISTA and SLISTA on large scale problems. Note that this experiment can take up to 24h to be generated. You can tweak the parameter N_JOB and N_GPU in `examples/run_comparison_networks.py` to accelerate the computations by parallelization and using GPU. Note that if both are set, you will have N_JOB / N_GPU jobs running on each GPU, which should be chosen reasonably.
 
 ```bash
 python examples/run_comparison_networks.py

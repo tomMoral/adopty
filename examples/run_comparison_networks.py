@@ -6,8 +6,6 @@ Benchmark different network solvers of the same LASSO problem.
 - Use example/plot_comparison_networks.py to plot the results.
   The figures are saved in figures/.
 """
-
-from __future__ import print_function
 import os
 import time
 from itertools import product
@@ -43,6 +41,15 @@ verbose = 1
 
 # base string for the save names.
 base_name = 'run_comparison_networks'
+
+n_dim = 64
+n_atoms = 256
+n_test = 10000
+n_samples = 10000
+random_state = 42
+
+max_iter = 3000
+n_layers = 30
 
 
 ####################################################
@@ -128,15 +135,6 @@ def run_one(parametrization, data, reg, n_layer, max_iter, n_samples, n_test,
 
 if __name__ == '__main__':
 
-    n_dim = 64
-    n_atoms = 256
-    n_test = 10000
-    n_samples = 10000
-    random_state = 42
-
-    max_iter = 2000
-    n_layers = 30
-
     save_name = os.path.join('figures', base_name)
 
     args = (max_iter, n_samples, n_test, n_atoms, n_dim,
@@ -170,7 +168,7 @@ if __name__ == '__main__':
             def stopping_criterion(costs):
                 return stop_on_no_decrease(1e-13, costs)
 
-            _, cost_test, *_ = ista(D, x_test, reg, max_iter=int(1e7),
+            _, cost_test, *_ = ista(D, x_test, reg, max_iter=int(1e4),
                                     stopping_criterion=stopping_criterion)
             c0 = cost_test[0]
             c_star = cost_test[-1]
