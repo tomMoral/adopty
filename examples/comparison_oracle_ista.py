@@ -87,4 +87,23 @@ ax2.grid()
 plt.subplots_adjust(top=0.85)
 plt.savefig('figures/comparison_oista_ista.pdf',
             bbox_extra_artists=[lgd, x, y], bbox_inches='tight')
+
+# Separate plot for step sizes in presentations
+fig = plt.figure(figsize=(6, 3))
+ax3 = fig.subplots()
+ax3.plot(steps / steps[0], color=colors['OISTA'], linewidth=2)
+textx = len(steps) / 2 - 3
+text_width = 10
+ax3.hlines(1., 0, textx - 4, color='k', linestyle='--')
+ax3.hlines(1., textx + text_width, len(steps), color='k', linestyle='--')
+ax3.text(textx, .7, r'$\frac{1}{L}$', fontsize=15)
+ax3.set_ylim(0.5, max(steps/steps[0]) + .2)
+ax3.set_ylabel(r'Oracle step')
+ax3.set_xlim(0, len(steps)-1)
+x = ax3.set_xlabel(r'Number of iterations')
+y = ax.set_ylabel(r'$F_x - F_x^*$')
+ax3.grid()
+ax3.set_xticks([0, 50, 100, 150])
+plt.savefig('figures/comparison_oista_ista_steps.pdf')
+
 plt.show()

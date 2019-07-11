@@ -77,5 +77,5 @@ plt.gca().yaxis.set_major_locator(plt.NullLocator())
 # plt.tight_layout()
 plt.subplots_adjust(top=0.75)
 
-plt.savefig('examples/figures/surrogate.pdf',
+plt.savefig('figures/surrogate.pdf',
             bbox_extra_artists=[x, y, lgd], bbox_inches='tight')

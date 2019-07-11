@@ -49,6 +49,7 @@ id_ax = {
     ('images', .1): (2, "Digits data $\lambda=0.1$"),
     ('images', .8): (3, "Digits data $\lambda=0.8$")
 }
+ncols = len(id_ax)
 
 
 FILE = "figures/run_comparison_network_m=256_n=64_reg=0.8_maxiter=10000.pkl"
@@ -61,10 +62,13 @@ eps = 1e-8
 regs = df.reg.unique()
 datasets = df.data.unique()
 
-fig, axes = plt.subplots(ncols=4, figsize=(12, 3))
+fig, axes = plt.subplots(ncols=ncols, figsize=(3 * ncols, 3))
 for data in datasets:
     for reg in regs:
-        idx, title = id_ax[(data, reg)]
+        idx = (data, reg)
+        if idx not in id_ax:
+            continue
+        idx, title = id_ax[idx]
         ax = axes[idx]
         this_expe = df[df.data == data]
         this_expe = this_expe[this_expe.reg == reg]
@@ -80,6 +84,8 @@ for data in datasets:
                 loss_ista = np.array(df_hack.loss_ista.iloc[i])
                 c_star = df_hack.c_star.iloc[i]
                 method = df_hack.method.iloc[i]
+                if method not in method_styles:
+                    continue
                 style_ = base_style.copy()
                 style_.update(method_styles[method])
                 ax.plot(np.r_[loss_ista[0], loss] - c_star, **style_)
