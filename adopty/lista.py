@@ -34,6 +34,10 @@ PARAMETRIZATIONS = {
         'threshold': [],
         'W_coupled': [],
     },
+    "dictionary": {
+        'step_size': [],
+        'D_hat': [],
+    },
 }
 
 
@@ -66,7 +70,8 @@ class Lista(torch.nn.Module):
         - 'coupled': one weight parametrization from Chen et al (2018).
         - 'alista': analytic weights from Chen et al (2019).
         - 'hessian': one weight parametrization as a quasi newton technique.
-        - 'step': only learn a step size
+        - 'step': only learn a step size.
+        - 'dictionary': the dictionary is learned as well as the step size.
     learn_th : bool (default: True)
         Wether to learn the thresholds or not.
     solver : str, (default: 'gradient_decent')
@@ -92,10 +97,9 @@ class Lista(torch.nn.Module):
             ctx = AVAILABLE_CONTEXT[0]
 
         if parametrization not in PARAMETRIZATIONS:
-            raise NotImplementedError("Could not find parametrization='{}'. "
-                                      "Should be in {}".format(
-                                          parametrization, PARAMETRIZATIONS
-                                      ))
+            raise NotImplementedError(
+                "Could not find parametrization='{}'. Should be in {}"
+                .format(parametrization, PARAMETRIZATIONS))
         if parametrization in ['step', 'coupled_step'] and not learn_th:
             raise ValueError("It is not possible to use parametrization "
                              "with step and learn_th=False")
@@ -159,6 +163,13 @@ class Lista(torch.nn.Module):
                 else:
                     z_hat = z_hat.matmul(layer_params['Wz']) \
                         + x.matmul(layer_params['Wx'])
+            elif self.parametrization == "dictionary":
+                D_hat = layer_params['D_hat']
+                if z_hat is None:
+                    z_hat = step_size * x.matmul(D_hat.t())
+                else:
+                    res = z_hat.matmul(D_hat) - x
+                    z_hat = z_hat - step_size * res.matmul(D_hat.t())
             else:
                 if "W_coupled" in layer_params:
                     W = layer_params['W_coupled']
@@ -305,6 +316,8 @@ class Lista(torch.nn.Module):
         I_k = np.eye(n_atoms)
 
         parameters_config = PARAMETRIZATIONS[self.parametrization]
+        if self.parametrization == 'dictionary':
+            D_hat = check_tensor(self.D, device=self.device)
 
         self.layers_parameters = []
         for layer in range(self.n_layers):
@@ -334,6 +347,9 @@ class Lista(torch.nn.Module):
                         layer_params['threshold'] = np.array(1 / self.L)
                     elif self.parametrization == "hessian":
                         layer_params['W_hessian'] = I_k / self.L
+                    elif self.parametrization == "dictionary":
+                        layer_params['step_size'] = np.array(1 / self.L)
+                        layer_params['D_hat'] = D_hat
                     else:
                         raise NotImplementedError()
 
