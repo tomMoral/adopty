@@ -9,6 +9,7 @@ __pycache__
 /joblib
 /.pytest_cache
 .vscode
+.ipynb_checkpoints
 
 # Script outputs
 *.pdf
@@ -16,3 +17,5 @@ __pycache__
 *.png
 .ipynb_checkpoints
 *.npy
+*.bck
+*.zip
