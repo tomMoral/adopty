@@ -75,19 +75,25 @@ steps, L, L_S, S_pca = get_steps(n_dim, n_atoms, n_samples, n_test, n_layers,
 # Plot the results
 ############################################
 ls_steps = 1 / L_S
+ls_2_steps = 2 / L_S
 n_quantiles = 11
 quantiles = np.linspace(0, 0.95, n_quantiles)
 # avg_ls = np.mean(ls_steps, axis=1)
 quants = np.array([np.quantile(ls_steps, q, axis=1) for q in quantiles])
+quants_2 = np.array([np.quantile(ls_2_steps, q, axis=1) for q in quantiles])
 f, ax = plt.subplots(1, 1, figsize=(3, 2))
 xlim = np.arange(1, n_layers + 1)
 ax.plot(xlim, steps, color=colors['SLISTA'], label='Learned steps',
         linewidth=3)
 ax.plot(xlim, quants[n_quantiles // 2], color='darkgoldenrod',
-        label=r'Median $1/L_S$', linewidth=3)
+        label=r'$1/L_S$', linewidth=3)
+ax.plot(xlim, quants_2[n_quantiles // 2], color='olivedrab',
+        label=r'$2/L_S$', linewidth=3)
 for i in range(n_quantiles // 2):
     ax.fill_between(xlim, quants[i], quants[n_quantiles - i - 1],
                     color='sandybrown', alpha=1.5 * (i + 1)/n_quantiles)
+    ax.fill_between(xlim, quants_2[i], quants_2[n_quantiles - i - 1],
+                    color='palegreen', alpha=1.5 * (i + 1)/n_quantiles)
 ax.hlines(1 / L, 1, 9, color='k', linestyle='--')
 ax.hlines(1 / L, 12, n_layers, color='k', linestyle='--')
 ax.text(9, 1/L * 0.93, r'$1/L$')
@@ -97,8 +103,9 @@ y_ = ax.set_ylabel('Step')
 # ax.yaxis.grid(True)
 ax.set_xticks([1, 10, 20])
 ax.set_xlim([1, n_layers])
-ax.set_ylim([0.15, 0.7])
-plt.yticks([1 / L, 2 / L, 3 / L], [r'$1/L$', r'$2/L$', r'$3/L$'])
+ax.set_ylim([0.15, 1])
+plt.yticks([1 / L, 2 / L, 3 / L, 4 / L],
+           [r'$1/L$', r'$2/L$', r'$3/L$', r'$4/L$'])
 # ax[1].hist(1 / np.array(S_pca), orientation='horizontal', bins=30,
 #            density='normed', color='sandybrown', alpha=0.8,
 #            histtype='bar', label=r'$\frac{1}{L_S}$')

@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 from adopty.ista import ista
 from adopty.fista import fista
 from adopty.oracle_ista import oracle_ista
+from adopty.backtracking_ista import backtracking_ista
 
 
 ############################################
@@ -46,9 +47,12 @@ lmbd = 0.5
 _, cost_ista, times_ista = ista(D, x[None, :], lmbd, max_iter=max_iter)
 _, cost_fista, times_fista = fista(D, x[None, :], lmbd, max_iter=max_iter)
 _, cost_oista, times_oista, steps = oracle_ista(D, x, lmbd, max_iter=max_iter)
+_, cost_btista, times_btista, steps_bt = backtracking_ista(D, x, lmbd, eta=.95,
+                                                           max_iter=max_iter)
 cost_ista = np.array(cost_ista)
 cost_oista = np.array(cost_oista)
 cost_fista = np.array(cost_fista)
+cost_btista = np.array(cost_btista)
 z_hat, c_star, _ = ista(D, x[None, :], lmbd, max_iter=3000)
 c_star = c_star[-1]
 
@@ -63,6 +67,8 @@ ax.semilogy(cost_ista - c_star, label=r'ISTA', color=colors['ISTA'],
             linewidth=2)
 ax.semilogy(cost_fista - c_star, label=r'FISTA', color=colors['FISTA'],
             linewidth=2)
+ax.semilogy(cost_btista - c_star,
+            label=r'BTISTA', color=colors['BTISTA'], linewidth=2)
 ax.semilogy(cost_oista - c_star,
             label=r'OISTA (proposed)',
             color=colors['OISTA'], linewidth=2)
@@ -73,6 +79,7 @@ lgd = f.legend(ncol=3, loc='upper center', handletextpad=0.1, handlelength=0.9,
                columnspacing=.7)
 ax2 = axes[1]
 ax2.plot(steps / steps[0], color=colors['OISTA'], linewidth=2)
+# ax2.plot(steps_bt / steps[0], color=colors['BTISTA'], linewidth=2)
 textx = len(steps) / 2 - 3
 text_width = 10
 ax2.hlines(1., 0, textx - 4, color='k', linestyle='--')

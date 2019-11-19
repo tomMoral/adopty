@@ -23,7 +23,7 @@ from adopty.stopping_criterions import stop_on_no_decrease
 
 # number of jobs and GPUs accessible for the parallel running of the methods
 N_JOBS = 4
-N_GPU = 0
+N_GPU = 4
 
 
 # Constants for logging in console.
@@ -46,6 +46,7 @@ n_dim = 64
 n_atoms = 256
 n_test = 10000
 n_samples = 10000
+per_layer = 'oneshot'
 random_state = 42
 
 max_iter = 3000
@@ -80,7 +81,7 @@ def colorify(message, color=BLUE):
 
 @mem.cache
 def run_one(parametrization, data, reg, n_layer, max_iter, n_samples, n_test,
-            n_atoms, n_dim, random_state):
+            n_atoms, n_dim, per_layer, random_state):
 
     # try to avoid having dangling memory
     torch.cuda.empty_cache()
@@ -96,7 +97,7 @@ def run_one(parametrization, data, reg, n_layer, max_iter, n_samples, n_test,
 
     tag = f"[{parametrization} - {n_layer}]"
     current_time = time.time() - START
-    msg = f"{tag} started at T={current_time:.0f} sec (device={device})"
+    msg = f"\r{tag} started at T={current_time:.0f} sec (device={device})"
     print(colorify(msg, BLUE))
 
     if data == "images":
@@ -113,14 +114,14 @@ def run_one(parametrization, data, reg, n_layer, max_iter, n_samples, n_test,
 
     network = Lista(D, n_layers=n_layer,
                     parametrization=parametrization,
-                    max_iter=max_iter, per_layer='oneshot',
+                    max_iter=max_iter, per_layer=per_layer,
                     device=device, name=parametrization)
     network.fit(x, reg)
     loss = network.score(x_test, reg)
     training_loss = network.training_loss_
 
     duration = time.time() - START - current_time
-    msg = (f"{tag} done in {duration:.0f} sec "
+    msg = (f"\r{tag} done in {duration:.0f} sec "
            f"at T={current_time:.0f} sec")
     print(colorify(msg, GREEN))
 
@@ -138,7 +139,7 @@ if __name__ == '__main__':
     save_name = os.path.join('figures', base_name)
 
     args = (max_iter, n_samples, n_test, n_atoms, n_dim,
-            random_state)
+            per_layer, random_state)
 
     iterator = product(parametrizations, datasets, regs,
                        range(n_layers))
@@ -151,34 +152,42 @@ if __name__ == '__main__':
         results = Parallel(n_jobs=N_JOBS, batch_size=1)(
             delayed_run_one(parametrization, data, reg, n_layer + 1, *args)
             for parametrization, data, reg, n_layer in iterator)
-
     for data in datasets:
         if data == "images":
             x, D, _ = make_image_coding(n_samples=n_samples + n_test,
                                         n_atoms=n_atoms, normalize=True,
                                         random_state=random_state)
         elif data == "simulations":
+            _, n_samples, n_test, *_ = args
             x, D, _ = make_coding(n_samples=n_samples + n_test,
                                   n_atoms=n_atoms, n_dim=n_dim,
                                   normalize=True, random_state=random_state)
         x_test = x[n_samples:]
-        x = x[:n_samples]
+        x_train = x[:n_samples]
         for reg in regs:
+            print("Computing ISTA for {} with lmbd={:.1}".format(data, reg))
+            if data == 'images':
+                reg = reg
 
             def stopping_criterion(costs):
                 return stop_on_no_decrease(1e-13, costs)
 
-            _, cost_test, *_ = ista(D, x_test, reg, max_iter=int(1e4),
-                                    stopping_criterion=stopping_criterion)
+            _, cost_test, *_ = ista(D, x_test, reg, max_iter=int(1e3),
+                                    stopping_criterion=stopping_criterion,
+                                    verbose=1)
+            _, cost_train, *_ = ista(D, x_train, reg, max_iter=int(1e3),
+                                     stopping_criterion=stopping_criterion,
+                                     verbose=1)
             c0 = cost_test[0]
             c_star = cost_test[-1]
 
-            results = [(*r, c0, c_star) if r[2] == data and r[3] == reg else r
+            results = [(*r, c0, c_star) if r[1] == data and r[2] == reg else r
                        for r in results]
             for n_layer in range(n_layers):
                 results.append(
-                    ('ista', data, reg, n_layer + 1, *args,
-                     cost_test[n_layer + 1], None, c0, c_star)
+                    ('ista', data, reg, n_layer + 1, max_iter, n_samples,
+                     n_test, n_atoms, n_dim, random_state,
+                     cost_test[n_layer + 1], cost_train, c0, c_star)
                 )
 
     results_df = pd.DataFrame(

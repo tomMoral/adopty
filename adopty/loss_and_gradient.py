@@ -1,14 +1,19 @@
 import numpy as np
 
 
+def l2(z_hat, D, x):
+    """Cost for the data fit term"""
+    res = z_hat.dot(D) - x
+    return .5 * (res * res).sum()
+
+
 def cost_lasso(z_hat, D, x, lmbd, flatten=False):
     """Cost of the LASSO
     """
     n_samples = x.shape[0]
     if flatten:
         z_hat = z_hat.reshape((n_samples, -1))
-    res = z_hat.dot(D) - x
-    return (.5 * (res * res).sum() + lmbd * abs(z_hat).sum()) / n_samples
+    return (l2(z_hat, D, x) + lmbd * abs(z_hat).sum()) / n_samples
 
 
 def grad(z_hat, D, x, lmbd=None, flatten=False, return_func=False):

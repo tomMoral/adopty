@@ -44,10 +44,11 @@ method_styles = {
     'step': dict(label="SLISTA (proposed)", color=colors['SLISTA']),
 }
 id_ax = {
-    ('simulations', .1): (0, "Simulated data $\lambda=0.1$"),
-    ('simulations', .8): (1, "Simulated data $\lambda=0.8$"),
-    ('images', .1): (2, "Digits data $\lambda=0.1$"),
-    ('images', .8): (3, "Digits data $\lambda=0.8$")
+    # ('simulations', .1): (0, "Simulated data $\lambda=0.1$"),
+    # ('simulations', .8): (1, "Simulated data $\lambda=0.8$"),
+    # ('images', .1): (2, "Digits data $\lambda=0.1$"),
+    # ('images', .8): (3, "Digits data $\lambda=0.8$")
+    ('images', .8): (0, "")
 }
 ncols = len(id_ax)
 
@@ -62,7 +63,9 @@ eps = 1e-8
 regs = df.reg.unique()
 datasets = df.data.unique()
 
-fig, axes = plt.subplots(ncols=ncols, figsize=(3 * ncols, 3))
+fig, axes = plt.subplots(ncols=ncols, figsize=(4 * ncols, 3))
+if isinstance(axes, plt.Axes):
+    axes = [axes]
 for data in datasets:
     for reg in regs:
         idx = (data, reg)
@@ -117,16 +120,16 @@ for data in datasets:
         ax.set_yscale("log")
         ax.set_title(title)
         ylim = ax.get_ylim()
-        ax.set_ylim(max(ylim[0], 5e-8), ylim[1])
+        ax.set_ylim(max(ylim[0], 5e-8), min(ylim[1], 1))
         ax.set_xlim(0, n_layers)
 
         ax.grid(True)
 
-ncol = 4
+ncol = 2
 fig.legend(lines, [l.get_label() for l in lines],
            loc='upper center', ncol=ncol, columnspacing=0.8)
-fig.tight_layout()
+# fig.tight_layout()
 fig.subplots_adjust(top=.75, wspace=.2)
-fig.savefig(f"figures/comparison_networks")
+fig.savefig(f"figures/comparison_networks_rebuttal")
 
 # plt.show()

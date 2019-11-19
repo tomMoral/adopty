@@ -1,11 +1,15 @@
 """Dataset utilities, for simulated and real examples
 """
 import numpy as np
+from joblib import Memory
 
 from .utils import check_random_state
 
 # from .ista import ista
 from .lista import Lista
+
+
+mem = Memory(location='.', verbose=0)
 
 
 def make_coding(n_samples=1000, n_atoms=10, n_dim=3, normalize=True,
@@ -163,18 +167,22 @@ def make_image_coding(n_samples=1000, n_atoms=256, normalize=True,
         activation associated to each observation for the dictionary D
     """
 
-    from sklearn.datasets import load_digits
+    digits = get_digits()
+    digits -= digits.mean(axis=1, keepdims=True)
+    digits /= digits.std(axis=1, keepdims=True)
 
-    D, _ = load_digits(return_X_y=True)
     rng = np.random.RandomState(random_state)
-    rng.shuffle(D)
+    rng.shuffle(digits)
 
-    D = D[:n_atoms]
+    D = digits[:n_atoms]
     if normalize:
         D /= np.linalg.norm(D, axis=1, keepdims=True)
+    _, n_dim = D.shape
 
     z = rng.randn(n_samples, n_atoms)
-    x = z.dot(D)
+    x = digits[n_atoms:n_atoms + n_samples]
+    x[:n_samples // 2] = z[:n_samples // 2].dot(D)
+    assert x.shape[0] == n_samples, (x.shape, n_samples)
 
     # Compute the effective regularization
     lmbd_max = x.dot(D.T)
@@ -183,3 +191,14 @@ def make_image_coding(n_samples=1000, n_atoms=256, normalize=True,
     lmbd_max = x.dot(D.T)
 
     return x, D, z
+
+
+@mem.cache
+def get_digits():
+    from sklearn.datasets import fetch_openml
+    from skimage.transform import resize
+    digits, _ = fetch_openml('mnist_784', version=1, return_X_y=True)
+
+    # Remove the borders of digits and then resize them to 8x8
+    digits = digits.reshape(-1, 28, 28)[:, 4:-4, 4:-4]
+    return resize(digits.T, (8, 8), anti_aliasing=True).T.reshape(-1, 64)
