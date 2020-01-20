@@ -58,9 +58,14 @@ def test_save(parametrization, learn_th):
     lista.fit(x, reg)
     parameters = lista.export_parameters()
 
+    assert all([isinstance(p, np.ndarray)
+                for pl in parameters for p in pl.values()])
+
     lista_ = Lista(D, n_layers, parametrization=parametrization,
                    learn_th=learn_th, initial_parameters=parameters)
     parameters_ = lista_.export_parameters()
+    assert all([isinstance(p, np.ndarray)
+                for pl in parameters_ for p in pl.values()])
     assert np.all([np.allclose(pl[k], pl_[k])
                    for pl, pl_ in zip(parameters, parameters_) for k in pl])
 

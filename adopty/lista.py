@@ -9,41 +9,20 @@ from .analytic_weights import get_alista_weights
 
 
 PARAMETRIZATIONS = {
-    "lista": {
-        'threshold': [],
-        'Wx': [],
-        'Wz': [],
-    },
-    "hessian": {
-        'threshold': [],
-        'W_hessian': ["sym"],
-    },
-    "coupled": {
-        'threshold': [],
-        'W_coupled': [],
-    },
-    "alista": {
-        'threshold': [],
-        'step_size': [],
-    },
-    "step": {
-        'step_size': [],
-    },
-    "first_step": {
-        'step_size': [],
-        'threshold': [],
-        'W_coupled': [],
-    },
-    "dictionary": {
-        'step_size': [],
-        'D_hat': [],
-    },
+    "lista": ['threshold', 'Wx', 'Wz'],
+    "hessian": ['threshold', 'W_hessian'],
+    "coupled": ['threshold', 'W_coupled'],
+    "alista": ['threshold', 'step_size'],
+    "step": ['step_size'],
+    "first_step": ['step_size', 'threshold', 'W_coupled'],
+    "dictionary": ['step_size', 'D_hat'],
 }
 
 
 def symmetric_gradient(p):
     """Constrain the gradient to be symmetric."""
-    p.grad.data.set_(p.grad.data + p.grad.data.t())
+    with torch.no_grad():
+        p.grad.set_(p.grad + p.grad.t())
 
 
 GRADIENT_HOOKS = {
@@ -123,7 +102,6 @@ class Lista(torch.nn.Module):
 
         self.learn_th = learn_th
         self.parametrization = parametrization
-        self.pre_gradient_hooks = {"sym": []}
 
         self.D = np.array(D)
         self.D_ = check_tensor(self.D, device=device)
@@ -174,7 +152,10 @@ class Lista(torch.nn.Module):
                 if "W_coupled" in layer_params:
                     W = layer_params['W_coupled']
                 elif "W_hessian" in layer_params:
-                    W = self.D_.t().matmul(layer_params['W_hessian'])
+                    # Make sure this is symmetric
+                    W_hessian = layer_params['W_hessian']
+                    W_hessian = (W_hessian + W_hessian.t()) / 2
+                    W = self.D_.t().matmul(W_hessian)
                 elif self.parametrization == "alista":
                     W = self.W
                 else:
@@ -339,13 +320,17 @@ class Lista(torch.nn.Module):
 
         parameters_config = PARAMETRIZATIONS[self.parametrization]
         if self.parametrization == 'dictionary':
-            self.D_ = check_tensor(self.D, device=self.device,
-                                   requires_grad=True)
+            if len(initial_parameters) > 0:
+                self.D_ = torch.nn.Parameter(check_tensor(
+                    initial_parameters[0]['D_hat']))
+            else:
+                self.D_ = torch.nn.Parameter(check_tensor(
+                    self.D, device=self.device))
 
         self.layers_parameters = []
         for layer in range(self.n_layers):
             if len(initial_parameters) > layer:
-                layer_params = initial_parameters[layer]
+                layer_params = initial_parameters[layer].copy()
             else:
                 if self.parametrization == "step":
                     layer_params = dict(step_size=np.array(1 / self.L))
@@ -372,9 +357,10 @@ class Lista(torch.nn.Module):
                         layer_params['W_hessian'] = I_k / self.L
                     elif self.parametrization == "dictionary":
                         layer_params['step_size'] = np.array(1 / self.L)
-                        layer_params['D_hat'] = self.D_
                     else:
                         raise NotImplementedError()
+            if self.parametrization == 'dictionary':
+                layer_params['D_hat'] = self.D_
 
             def check_parameter(p, device=None):
                 if not isinstance(p, torch.nn.Parameter):
@@ -388,11 +374,8 @@ class Lista(torch.nn.Module):
                             for k, p in layer_params.items()}
 
             # Retrieve parameters hooks and register them
-
             for name, p in layer_params.items():
                 self.register_parameter("layer{}-{}".format(layer, name), p)
-                for h in parameters_config[name]:
-                    self.pre_gradient_hooks[h].append(p)
 
             self.layers_parameters += [layer_params]
 
@@ -488,11 +471,6 @@ class Lista(torch.nn.Module):
         lr = min(4 * lr, 1e12)
 
         self._saved_gradient = []
-
-        for hook, list_params in self.pre_gradient_hooks.items():
-            for p in list_params:
-                if p.grad is not None:
-                    GRADIENT_HOOKS[hook](p)
 
         norm_g = 0
         for i, p in enumerate(parameters):
