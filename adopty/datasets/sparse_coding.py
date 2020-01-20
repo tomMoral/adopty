@@ -2,10 +2,10 @@
 """
 import numpy as np
 
-from .utils import check_random_state
+from ..utils import check_random_state
 
 # from .ista import ista
-from .lista import Lista
+from ..lista import Lista
 
 
 def make_coding(n_samples=1000, n_atoms=10, n_dim=3, normalize=True,

@@ -1,28 +1,7 @@
 import pytest
 import numpy as np
 from adopty.sinkhorn import Sinkhorn
-from adopty.utils import check_random_state
-
-
-def gen_fake_problem(n=10, m=30, p=2, random_state=None):
-
-    rng = check_random_state(random_state)
-
-    # Generate point cloud and probability distribution
-    x = rng.randn(n, p)
-    y = rng.randn(m, p)
-    alpha = abs(rng.rand(n))
-    beta = abs(rng.rand(m))
-
-    # normalize the probability
-    alpha /= alpha.sum()
-    beta /= beta.sum()
-
-    # Generate the cost matrix
-    xmy = x[:, None] - y[None]
-    C = (xmy ** 2).sum(2)
-
-    return alpha, beta, C, x, y
+from adopty.datasets.optimal_transport import make_ot
 
 
 @pytest.mark.parametrize(
@@ -37,7 +16,7 @@ def test_log_domain(eps, n_layers):
     p = 2
     n, m = 10, 15
 
-    alpha, beta, C, *_ = gen_fake_problem(n, m, p, random_state=0)
+    alpha, beta, C, *_ = make_ot(n, m, p, random_state=0)
 
     snet1 = Sinkhorn(n_layers, log_domain=True)
     f1, g1 = snet1.transform(alpha, beta, C, eps)
@@ -68,7 +47,7 @@ def test_sinkhorn_np():
     eps = .1
     n_layers = 500
 
-    alpha, beta, C, *_ = gen_fake_problem(n, m, p, random_state=0)
+    alpha, beta, C, *_ = make_ot(n, m, p, random_state=0)
 
     snet = Sinkhorn(n_layers=n_layers, log_domain=True)
     f, g = snet.transform(alpha, beta, C, eps)
@@ -84,7 +63,7 @@ def test_gradient_beta():
     eps = .1
     n_layers = 500
 
-    alpha, beta, C, *_ = gen_fake_problem(n, m, p, random_state=0)
+    alpha, beta, C, *_ = make_ot(n, m, p, random_state=0)
 
     snet = Sinkhorn(n_layers=n_layers)
 
