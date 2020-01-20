@@ -16,10 +16,15 @@ class Sinkhorn(torch.nn.Module):
 
     Parameters
     ----------
-    eps : float
-        Value of the entropic regularization.
     n_layer : int
         Number of layers in the network.
+    tol : float
+        Stopping criterion. When the dual variable move less than the specified
+        tolerance, return from the sinkhorn algorithm. If set to None, run for
+        as many iteration as requested.
+    log_domain: bool (default: True)
+        If set to True, run the computation in the log-domain. This is useful
+        for small values of eps but might slow down the computations.
     name : str (default: Sinkhorn)
         Name of the model.
     ctx : str or None
@@ -31,8 +36,8 @@ class Sinkhorn(torch.nn.Module):
         according to the pytorch API (_eg_ 'cpu', 'gpu', 'gpu/1',..).
     """
 
-    def __init__(self, n_layers, name="Sinkhorn", ctx=None, verbose=1,
-                 log_domain=True, device=None):
+    def __init__(self, n_layers, tol=None, log_domain=True,
+                 name="Sinkhorn", ctx=None, verbose=1, device=None):
         if ctx:
             msg = "Context {} is not available on this computer."
             assert ctx in AVAILABLE_CONTEXT, msg.format(ctx)
@@ -44,12 +49,13 @@ class Sinkhorn(torch.nn.Module):
         self.device = device
         self.verbose = verbose
 
+        self.tol = tol
         self.n_layers = n_layers
         self.log_domain = log_domain
 
         super().__init__()
 
-    def forward(self, alpha, beta, C, eps, output_layer=None, np_=None):
+    def forward(self, alpha, beta, C, eps, output_layer=None):
         n, m = C.shape
 
         if output_layer is None:
@@ -65,13 +71,18 @@ class Sinkhorn(torch.nn.Module):
             K = torch.exp(- C / eps)
 
         # Compute the following layers
-        for layer_params in range(output_layer):
+        for id_layer in range(output_layer):
+            v_hat = v
             if self.log_domain:
                 f = eps * (torch.log(alpha) - log_dot_exp(C, g, eps))
                 g = eps * (torch.log(beta) - log_dot_exp(C.t(), f, eps))
             else:
                 u = alpha / torch.matmul(K, v)
                 v = beta / torch.matmul(u, K)
+
+            if (self.tol is not None and id_layer % 10 == 0
+                    and torch.norm(v - v_hat) < 1e-10):
+                break
 
         if not self.log_domain:
             f = eps * torch.log(u)
@@ -130,12 +141,12 @@ class Sinkhorn(torch.nn.Module):
         loss : float
             Optimal transport loss between alpha, beta, for the given C and eps
         """
-        alpha_ = check_tensor(alpha, device=self.device)
-        beta_ = check_tensor(beta, device=self.device)
-        C_ = check_tensor(C, device=self.device)
+        alpha = check_tensor(alpha, device=self.device)
+        beta = check_tensor(beta, device=self.device)
+        C = check_tensor(C, device=self.device)
         with torch.no_grad():
-            f, g = self(alpha_, beta_, C_, eps, output_layer=output_layer)
-            return self._loss_fn(f, g, alpha_, beta_, C_, eps, primal=primal
+            f, g = self(alpha, beta, C, eps, output_layer=output_layer)
+            return self._loss_fn(f, g, alpha, beta, C, eps, primal=primal
                                  ).cpu().numpy()
 
     def compute_loss(self, alpha, beta, C, eps, primal=False):
@@ -187,8 +198,15 @@ class Sinkhorn(torch.nn.Module):
         return g.cpu().numpy()
 
     def get_jacobian_beta(self, alpha, beta, C, eps, output_layer=None):
-        n_samples, n_features = beta.shape
+        """Compute the Jacobian of the scale dual variable g relative to beta.
+        """
+        n_features = beta.shape
+
+        alpha = check_tensor(alpha, device=self.device)
         beta = check_tensor(beta, device=self.device, require_grad=True)
+        C = check_tensor(C, device=self.device)
+
+        # Contruct the matrix to probe the jacobian
         beta = beta.squeeze()
         beta = beta.repeat(n_features, 1)
         f, g = self(alpha, beta, C, eps, output_layer=output_layer)
@@ -196,13 +214,17 @@ class Sinkhorn(torch.nn.Module):
             g, beta, grad_outputs=torch.eye(n_features))[0].cpu().numpy()
 
     def transform(self, alpha, beta, C, eps, output_layer=None):
+        """Compute the dual variables associate to the transport plan.
+
+        The transport plan can be recovered using the formula:
+            P = exp(f / eps)[:, None] * exp(-C / eps) * exp (g / eps)[None]
+        """
         # Compat numpy
-        alpha_ = check_tensor(alpha, device=self.device)
-        beta_ = check_tensor(beta, device=self.device)
-        C_ = check_tensor(C, device=self.device)
+        alpha = check_tensor(alpha, device=self.device)
+        beta = check_tensor(beta, device=self.device)
+        C = check_tensor(C, device=self.device)
 
         with torch.no_grad():
-            f, g = self(alpha_, beta_, C_, eps, output_layer=output_layer,
-                        np_=(alpha, beta, C))
+            f, g = self(alpha, beta, C, eps, output_layer=output_layer)
 
         return f.cpu().numpy(), g.cpu().numpy()
