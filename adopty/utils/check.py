@@ -20,9 +20,11 @@ def check_random_state(seed):
                      ' instance' % seed)
 
 
-def check_tensor(x, device=None):
+def check_tensor(x, device=None, requires_grad=None):
     if isinstance(x, np.ndarray) or type(x) in [int, float]:
-        x = torch.Tensor(x)
+        x = torch.tensor(x)
     if isinstance(x, torch.Tensor):
-        return x.to(device=device, dtype=torch.float64)
+        x = x.to(device=device, dtype=torch.float64)
+    if requires_grad is not None:
+        x.requires_grad_(requires_grad)
     return x

@@ -308,6 +308,28 @@ class Lista(torch.nn.Module):
                     ).cpu().numpy())
         return np.array(loss)
 
+    def gradient_D(self, x, lmbd):
+        """Compute the gradient of the Lasso relative to D with autodiff"""
+        assert self.parametrization == "dictionary", (
+            "Gradient in D is only available with parametrization='dictionary'"
+        )
+        self.zero_grad()
+        z_hat = self(x, lmbd)
+        loss = self._loss_fn(x, lmbd, z_hat)
+        loss.backward()
+        return self.D_.grad
+
+    def get_jacobian(self, X, reg, output_layer=None):
+        n_features = X.shape[1]
+        x = check_tensor(X, self.device)
+        x = x.squeeze()
+        x = x.repeat(n_features, 1)
+        x.requires_grad_(True)
+        z = self(x, reg, output_layer=output_layer)
+        x_hat = z.matmul(self.D_)
+        return torch.autograd.grad(
+            x_hat, x, grad_outputs=torch.eye(n_features))[0].cpu().numpy()
+
     def _init_network_parameters(self, initial_parameters=[]):
         """Initialize the parameters of the network
         """
@@ -317,7 +339,8 @@ class Lista(torch.nn.Module):
 
         parameters_config = PARAMETRIZATIONS[self.parametrization]
         if self.parametrization == 'dictionary':
-            D_hat = check_tensor(self.D, device=self.device)
+            self.D_ = check_tensor(self.D, device=self.device,
+                                   requires_grad=True)
 
         self.layers_parameters = []
         for layer in range(self.n_layers):
@@ -349,14 +372,20 @@ class Lista(torch.nn.Module):
                         layer_params['W_hessian'] = I_k / self.L
                     elif self.parametrization == "dictionary":
                         layer_params['step_size'] = np.array(1 / self.L)
-                        layer_params['D_hat'] = D_hat
+                        layer_params['D_hat'] = self.D_
                     else:
                         raise NotImplementedError()
 
+            def check_parameter(p, device=None):
+                if not isinstance(p, torch.nn.Parameter):
+                    return torch.nn.Parameter(
+                        check_tensor(p, device=self.device))
+                else:
+                    return p
+
             # transform all the parameters to learnable Tensor
-            layer_params = {
-                k: torch.nn.Parameter(check_tensor(p, device=self.device))
-                for k, p in layer_params.items()}
+            layer_params = {k: check_parameter(p, device=self.device)
+                            for k, p in layer_params.items()}
 
             # Retrieve parameters hooks and register them
 
@@ -452,7 +481,7 @@ class Lista(torch.nn.Module):
         x = check_tensor(x, device=self.device)
 
         res = z_hat.matmul(self.D_) - x
-        return (0.5 * (res * res).sum() +
+        return (0.5 * torch.dot(res.view(-1), res.view(-1)) +
                 lmbd * torch.abs(z_hat).sum()) / n_samples
 
     def _update_parameters(self, parameters, lr):
